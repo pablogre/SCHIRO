@@ -1,0 +1,3331 @@
+<!-- templates/nueva_venta.html - VERSIÓN CON IMPRESIÓN TÉRMICA -->
+{% extends "base.html" %}
+
+{% block title %}Nueva Venta - POS Argentina{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2"><i class="fas fa-cash-register"></i> Nueva Venta</h1>
+    <div>
+        
+        <button type="button" class="btn btn-info" onclick="mostrarAyudaCtaCte()">
+            <i class="fas fa-file-invoice"></i> ¿Cómo funciona CTA.CTE?
+        </button>
+
+        <button class="btn btn-secondary" onclick="limpiarVenta()">
+            <i class="fas fa-trash"></i> Limpiar Todo
+        </button>
+        <a href="{{ url_for('facturas') }}" class="btn btn-info">
+            <i class="fas fa-file-invoice"></i> Ver Facturas
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <!-- Búsqueda de productos MEJORADA -->
+        <div class="card mb-3">
+            <div class="card-header bg-primary text-white">
+                <h5><i class="fas fa-search"></i> Agregar Productos</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <label for="buscar_producto" class="form-label">Buscar por código o nombre</label>
+                        <div class="position-relative">
+                            <input type="text" class="form-control" id="buscar_producto" 
+                                   placeholder="Ej: PROD001, emplo 1, servicio..." 
+                                   autocomplete="off" autofocus>
+                            <div id="sugerencias" class="position-absolute w-100 bg-white border rounded shadow-sm" 
+                                 style="top: 100%; z-index: 1000; max-height: 300px; overflow-y: auto; display: none;">
+                            </div>
+                        </div>
+                        <small class="form-text text-muted">
+                            <i class="fas fa-lightbulb"></i> Busca por código completo o parte del nombre
+                        </small>
+                    </div>
+                    <!-- <div class="col-md-3">
+                        <label for="cantidad" class="form-label">Cantidad</label>
+                        <input type="number" class="form-control" id="cantidad" value="1.000" min="0.001" step="0.001">
+                    </div> -->
+                    <div class="col-md-3">
+                        <label class="form-label">&nbsp;</label>
+                        <button type="button" class="btn btn-success w-100" onclick="agregarProducto()">
+                            <i class="fas fa-plus"></i> Agregar
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Productos de acceso rápido -->
+                <div class="mt-3">
+                    <h6><i class="fas fa-bolt"></i> Acceso Rápido:</h6>
+                    <div class="row">
+                        {% for producto in productos[:8] %}
+                        <div class="col-md-3 col-sm-6 mb-2">
+                            <button type="button" class="btn btn-outline-primary btn-sm w-100 text-start" 
+                                    onclick="seleccionarProductoPorId({{ producto.id }})">
+                                <div><strong>{{ producto.codigo }}</strong></div>
+                                <div><small>{{ producto.nombre[:20] }}{% if producto.nombre|length > 20 %}...{% endif %}</small></div>
+                                <div><strong>${{ "%.2f"|format(producto.precio) }}</strong></div>
+                                <div><small class="text-muted">Stock: {{ producto.stock }}</small></div>
+                            </button>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detalle de la venta -->
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5><i class="fas fa-shopping-cart"></i> Detalle de la Venta</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped" id="tabla_venta">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Código</th>
+                                <th>Producto</th>
+                                <th>Cantidad</th>
+                                <th>Precio Unit.</th>
+                                <th>Subtotal</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="items_venta">
+                            <!-- Los items se agregarán dinámicamente -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div id="mensaje_vacio" class="text-center text-muted py-5">
+                    <i class="fas fa-shopping-cart fa-3x mb-3 opacity-50"></i>
+                    <h5>No hay productos agregados a la venta</h5>
+                    <p>Usa el buscador de arriba para agregar productos</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <!-- Información del cliente -->
+        <div class="card mb-3">
+            <div class="card-header bg-info text-white">
+                <h5><i class="fas fa-user"></i> Cliente</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="cliente_select" class="form-label">Seleccionar Cliente</label>
+                    <select class="form-select" id="cliente_select" onchange="actualizarTipoComprobante()">
+                        <option value="1" data-condicion="CONSUMIDOR_FINAL" data-lista-precio="1">Consumidor Final</option>
+                        {% for cliente in clientes %}
+                        <option value="{{ cliente.id }}" 
+                                data-condicion="{{ cliente.condicion_iva }}" 
+                                data-documento="{{ cliente.documento or '' }}"
+                                data-lista-precio="{{ cliente.lista_precio or 1 }}">
+                            {{ cliente.nombre }}
+                            {% if cliente.documento %} - {{ cliente.documento }}{% endif %}
+                            {% if cliente.lista_precio and cliente.lista_precio > 1 %} 📋L{{ cliente.lista_precio }}{% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <!-- SELECTOR DE LISTA DE PRECIOS -->
+                <div class="mb-3">
+                    <label for="lista_precio_select" class="form-label">Lista de Precios</label>
+                    <select class="form-select" id="lista_precio_select" onchange="cambiarListaPrecio()">
+                        <option value="1" data-nombre="Minorista">📋 Lista 1 - Minorista</option>
+                        <option value="2" data-nombre="Mayorista">📋 Lista 2 - Mayorista</option>
+                        <option value="3" data-nombre="Distribuidor">📋 Lista 3 - Distribuidor</option>
+                        <option value="4" data-nombre="Especial">📋 Lista 4 - Especial</option>
+                        <option value="5" data-nombre="Promocional">📋 Lista 5 - Promocional</option>
+                    </select>
+                    <small class="form-text text-muted">Se actualiza según el cliente o cambiar manual</small>
+                </div>
+                
+                <!-- ═══ BOTÓN CARGAR PENDIENTES CTA.CTE ═══ -->
+                <div class="mb-3">
+                    <button type="button" 
+                            class="btn btn-warning w-100" 
+                            onclick="cargarProductosPendientesCTACTE()"
+                            title="Ver productos pendientes de pago del cliente">
+                        <i class="fas fa-clock"></i> 
+                        Cargar Pendientes CTA.CTE
+                    </button>
+                </div>
+                <div class="mb-3">
+                    <label for="tipo_comprobante" class="form-label">Tipo de Comprobante</label>
+                    <select class="form-select" id="tipo_comprobante">
+                        <option value="06">Factura B - Monotributista</option>
+                        <option value="11">Factura C - Consumidor Final</option>
+                        <option value="01">Factura A - Responsable Inscripto</option>
+                    </select>
+                    <small class="form-text text-muted">Se selecciona automáticamente según el cliente</small>
+                </div>
+
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>Cliente seleccionado:</strong>
+                    <div id="info_cliente">Consumidor Final</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Totales -->
+        <div class="card mb-3">
+            <div class="card-header bg-warning text-dark">
+                <h5><i class="fas fa-calculator"></i> Totales</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-2">
+                    <div class="col">Subtotal:</div>
+                    <div class="col text-end" id="subtotal_display">$0.00</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col" id="iva_label">IVA:</div>
+                    <div class="col text-end" id="iva_display">$0.00</div>
+                </div>
+                <hr>
+                <div class="row">
+                    <div class="col"><h5>Total:</h5></div>
+                    <div class="col text-end"><h5 id="total_display" class="text-success">$0.00</h5></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Finalizar venta -->
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5><i class="fas fa-check"></i> Finalizar Venta</h5>
+            </div>
+            <div class="card-body">
+                <!-- Checkbox para impresión automática -->
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="imprimir_automatico" checked>
+                    <label class="form-check-label" for="imprimir_automatico">
+                        <i class="fas fa-print"></i> Imprimir automáticamente
+                    </label>
+                </div>
+                
+                <button type="button" class="btn btn-success btn-lg w-100 mb-3" onclick="procesarVenta()" id="btn_procesar">
+                    <i class="fas fa-check-circle"></i> Procesar Venta
+                </button>
+                
+                <div class="row">
+                    <div class="col-4">
+                        <button type="button" class="btn btn-secondary w-100" onclick="limpiarVenta()">
+                            <i class="fas fa-trash"></i> Limpiar
+                        </button>
+                    </div>
+                    <div class="col-4">
+                        <button type="button" class="btn btn-info w-100" onclick="guardarBorrador()">
+                            <i class="fas fa-save"></i> Borrador
+                        </button>
+                    </div>
+                    <div class="col-4">
+                        <button type="button" class="btn btn-warning w-100" onclick="testImpresion()" title="Probar impresora">
+                            <i class="fas fa-print"></i> Test
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Información del sistema -->
+        <div class="card mt-3">
+            <div class="card-body text-center">
+                <small class="text-muted">
+                    <i class="fas fa-info-circle"></i> Sistema POS Argentina<br>
+                    Ambiente: <span class="badge bg-warning">PRODUCCIÓN</span><br>
+                    Usuario: {{ session.nombre }}<br>
+                    <button type="button" class="btn btn-link btn-sm p-0 mt-1" onclick="verificarEstadoImpresora()">
+                        <i class="fas fa-printer"></i> <small>Estado Impresora</small>
+                    </button>
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de confirmación -->
+<div class="modal fade" id="modalConfirmacion" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-check-circle"></i> Venta Procesada
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="resultado_venta"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Cerrar
+                </button>
+                
+                <div class="btn-group" role="group">
+                    <button type="button" class="btn btn-info dropdown-toggle" data-bs-toggle="dropdown">
+                        <i class="fas fa-qrcode"></i> QR ARCA
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="#" onclick="mostrarQRFactura()">
+                            <i class="fas fa-qrcode"></i> Mostrar QR
+                        </a></li>
+                        <li><a class="dropdown-item" href="#" onclick="validarQRFactura()">
+                            <i class="fas fa-check-circle"></i> Validar QR
+                        </a></li>
+                        <li><a class="dropdown-item" href="#" onclick="abrirQREnAFIP()">
+                            <i class="fas fa-external-link-alt"></i> Abrir en ARCA
+                        </a></li>
+                    </ul>
+                </div>
+                
+                <button type="button" class="btn btn-warning" onclick="verificarEstadoImpresora()">
+                    <i class="fas fa-printer"></i> Estado
+                </button>
+                
+                <button type="button" class="btn btn-primary" onclick="imprimirFactura()">
+                    <i class="fas fa-print"></i> Imprimir Ticket
+                </button>
+                
+                <button type="button" class="btn btn-success" onclick="nuevaVenta()">
+                    <i class="fas fa-plus"></i> Nueva Venta
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de error -->
+<div class="modal fade" id="modalError" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle"></i> Error
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="mensaje_error"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de información -->
+<div class="modal fade" id="modalInfo" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-info-circle"></i> Información del Sistema
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="mensaje_info"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-warning" onclick="testImpresion()">
+                    <i class="fas fa-print"></i> Test de Impresión
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Medios de Pago -->
+<div class="modal fade" id="modalMediosPago" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title">
+                    <i class="fas fa-credit-card"></i> Medios de Pago
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" onclick="cancelarMediosPago()"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Resumen de la venta -->
+                <div class="alert alert-info mb-4">
+                    <div class="row">
+                        <div class="col-6">
+                            <strong>Total a pagar:</strong><br>
+                            <span class="h4 text-primary" id="total_a_pagar">$0.00</span>
+                        </div>
+                        <div class="col-6">
+                            <strong>Total ingresado:</strong><br>
+                            <span class="h4" id="total_ingresado">$0.00</span>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <strong>Diferencia:</strong> 
+                        <span class="h5" id="diferencia_pago">$0.00</span>
+                        <div id="estado_pago" class="mt-1"></div>
+                    </div>
+                </div>
+
+                <!-- Agregar esta sección ANTES de "Agregar Medio de Pago" -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6><i class="fas fa-percent"></i> Descuento</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="form-label">Descuento (%)</label>
+                                <input type="number" class="form-control" id="descuento_porcentaje" 
+                                    placeholder="0" step="0.1" min="0" max="100"
+                                    onchange="aplicarDescuentoPorcentaje()">
+                            </div>
+                            <div class="col-md-6">
+                                <div id="info_descuento_simple" class="mt-4 text-success" style="display: none;">
+                                    <strong>Ahorro: $<span id="ahorro_descuento">0.00</span></strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Selección de medio de pago -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6><i class="fas fa-plus"></i> Agregar Medio de Pago</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="form-label">Medio de Pago</label>
+                                <select class="form-select" id="medio_pago_select">
+                                    <option value="">Seleccionar...</option>
+                                    <option value="efectivo">💵 Efectivo</option>
+                                    <option value="credito">💳 Tarjeta de Crédito</option>
+                                    <option value="debito">💳 Tarjeta de Débito</option>
+                                    <option value="mercado_pago">📱 Mercado Pago</option>
+                                    <option value="CTA.CTE">📋 Cuenta Corriente (Venta Fiada)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Importe</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" id="importe_pago" 
+                                           placeholder="0.00" step="0.01" min="0.01">
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">&nbsp;</label>
+                                <button type="button" class="btn btn-success w-100" onclick="agregarMedioPago()">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Botones de acceso rápido -->
+                        <div class="mt-3">
+                            <small class="text-muted">Acceso rápido:</small><br>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <button type="button" class="btn btn-outline-success" onclick="completarConEfectivo()">
+                                    <i class="fas fa-money-bill-wave"></i> Completar con Efectivo
+                                </button>
+                                <button type="button" class="btn btn-outline-primary" onclick="completarConTarjeta('credito')">
+                                    <i class="fas fa-credit-card"></i> Completar con Crédito
+                                </button>
+                                <button type="button" class="btn btn-outline-info" onclick="completarConTarjeta('debito')">
+                                    <i class="fas fa-credit-card"></i> Completar con Débito
+                                </button>
+                                <button type="button" class="btn btn-outline-warning" onclick="completarConMercadoPago()">
+                                    <i class="fas fa-mobile-alt"></i> Completar con Mercado Pago
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" onclick="completarConCTACTE()">
+                                    <i class="fas fa-clipboard-list"></i> CTA.CTE (Fiado)
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lista de medios de pago agregados -->
+                <div class="card">
+                    <div class="card-header">
+                        <h6><i class="fas fa-list"></i> Medios de Pago Ingresados</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Medio</th>
+                                        <th class="text-end">Importe</th>
+                                        <th class="text-center">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabla_medios_pago">
+                                    <!-- Se llena dinámicamente -->
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <div id="mensaje_sin_medios" class="text-center text-muted py-3">
+                            <i class="fas fa-credit-card fa-2x mb-2 opacity-50"></i>
+                            <p>No se han agregado medios de pago</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Manejo de vuelto para efectivo -->
+                <div id="seccion_vuelto" class="alert alert-warning mt-3" style="display: none;">
+                    <h6><i class="fas fa-hand-holding-usd"></i> Vuelto a entregar</h6>
+                    <div class="row">
+                        <div class="col-6">
+                            <strong>Efectivo recibido:</strong> $<span id="efectivo_recibido">0.00</span>
+                        </div>
+                        <div class="col-6">
+                            <strong>Vuelto:</strong> <span class="h5 text-danger">$<span id="vuelto_cantidad">0.00</span></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="cancelarMediosPago()">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-warning" onclick="limpiarMediosPago()">
+                    <i class="fas fa-trash"></i> Limpiar Todo
+                </button>
+                <button type="button" class="btn btn-success" id="btn_confirmar_pago" onclick="confirmarMediosPago()" disabled>
+                    <i class="fas fa-check"></i> Confirmar Pago
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- Modal de Ayuda CTA.CTE -->
+<div class="modal fade" id="modalAyudaCtaCte" tabindex="-1" role="dialog" aria-labelledby="modalAyudaCtaCteLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="modalAyudaCtaCteLabel">
+                    <i class="fas fa-question-circle"></i> Ayuda - Cuenta Corriente
+                </h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body" id="contenidoAyudaCtaCte">
+                <!-- El contenido se cargará dinámicamente aquí -->
+                <div class="text-center p-5">
+                    <i class="fas fa-spinner fa-spin fa-3x text-info"></i>
+                    <p class="mt-3">Cargando ayuda...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+<!-- 1. VERIFICAR QUE EL JAVASCRIPT ESTÉ EN EL LUGAR CORRECTO -->
+
+
+{% block scripts %}
+
+<!-- SweetAlert2 -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<script>
+// Variables globales
+let itemsVenta = [];
+let contadorItems = 0;
+let timeoutBusqueda = null;
+let productoSeleccionado = null;
+let mediosPagoIngresados = [];
+let contadorMediosPago = 0;
+let totalVenta = 0;
+let listaPrecioActiva = 1; // Lista de precios activa (1-5)
+let tipoPrecioActivo = 'venta'; // Tipo de precio: 'venta' o 'costo' (mayoristas)
+// ═══ VARIABLES GLOBALES PARA CTA.CTE ═══
+let productosPendientesCTACTE = [];  // Productos pendientes del cliente
+let productosSeleccionadosCTACTE = [];  // IDs de cta_cte_detalle seleccionados para pagar
+let pesoBalanza = null; // Almacena el peso detectado del código de balanza
+
+console.log('🚀 JavaScript de nueva_venta.html cargado correctamente');
+
+// ✅ FUNCIÓN CORRECTA: Cálculo IVA método AFIP
+function calcularIVAAFIP() {
+    // Agrupar items por alícuota de IVA
+    const porAlicuota = {};
+    
+    itemsVenta.forEach(item => {
+        const alicuota = item.iva;
+        if (!porAlicuota[alicuota]) {
+            porAlicuota[alicuota] = 0;
+        }
+        porAlicuota[alicuota] += item.subtotal;
+    });
+    
+    // Calcular IVA por alícuota y redondear
+    let ivaTotal = 0;
+    Object.keys(porAlicuota).forEach(alicuota => {
+        const baseImponible = porAlicuota[alicuota];
+        const ivaAlicuota = Math.round((baseImponible * parseFloat(alicuota) / 100) * 100) / 100;
+        ivaTotal += ivaAlicuota;
+    });
+    
+    return Math.round(ivaTotal * 100) / 100;
+}
+
+// ================== FUNCIÓN PARA DETECTAR Y PARSEAR CÓDIGOS DE BALANZA ==================
+function detectarCodigoBalanza(codigo) {
+    // Verificar si es un código de balanza: 13 dígitos y empieza con "200"
+    if (codigo.length === 13 && codigo.startsWith('200')) {
+        console.log('🎯 Código de balanza detectado:', codigo);
+        
+        // Extraer partes del código
+        const codigoProducto = codigo.substring(3, 7);  // Posiciones 3-6 (4 dígitos)
+        const pesoGramos = codigo.substring(7, 12);     // Posiciones 7-11 (5 dígitos)
+        const digitoVerificador = codigo.substring(12, 13); // Último dígito
+        
+        // Convertir peso de gramos a kg
+        const pesoKg = parseInt(pesoGramos) / 1000;
+        
+        console.log('📊 Desglose del código de balanza:');
+        console.log('   - Código producto:', codigoProducto);
+        console.log('   - Peso en gramos:', pesoGramos);
+        console.log('   - Peso en kg:', pesoKg);
+        console.log('   - Dígito verificador:', digitoVerificador);
+        
+        return {
+            esBalanza: true,
+            codigoProducto: codigoProducto,
+            peso: pesoKg
+        };
+    }
+    
+    return {
+        esBalanza: false,
+        codigoProducto: codigo,
+        peso: null
+    };
+}
+// ====================================================================================
+
+
+
+function buscarProductos(termino) {
+    console.log('🔍 buscarProductos llamada con:', termino);
+    
+    if (termino.length < 2) {
+        console.log('❌ Término muy corto');
+        ocultarSugerencias();
+        return;
+    }
+    
+    // ================== NUEVO: DETECTAR CÓDIGO DE BALANZA ==================
+    const infoBalanza = detectarCodigoBalanza(termino);
+    
+    if (infoBalanza.esBalanza) {
+        // Almacenar el peso globalmente
+        pesoBalanza = infoBalanza.peso;
+        console.log('⚖️ Peso de balanza almacenado:', pesoBalanza, 'kg');
+        
+        // Buscar con el código real del producto
+        termino = infoBalanza.codigoProducto;
+        console.log('🔄 Buscando producto con código:', termino);
+    } else {
+        // Si no es código de balanza, limpiar el peso almacenado
+        pesoBalanza = null;
+    }
+    // ========================================================================
+    
+    const url = `/api/buscar_productos/${encodeURIComponent(termino)}`;
+    console.log('📡 Fetching:', url);
+    
+    fetch(url)
+        .then(response => {
+            console.log('📥 Response status:', response.status);
+            return response.json();
+        })
+        .then(productos => {
+            console.log('✅ Productos recibidos:', productos);
+            mostrarSugerencias(productos);
+        })
+        .catch(error => {
+            console.error('❌ Error en búsqueda:', error);
+            ocultarSugerencias();
+        });
+}
+
+function mostrarSugerencias(productos) {
+    const contenedor = document.getElementById('sugerencias');
+    
+    if (productos.length === 0) {
+        contenedor.innerHTML = '<div class="p-2 text-muted"><i class="fas fa-search"></i> No se encontraron productos</div>';
+        contenedor.style.display = 'block';
+        return;
+    }
+    
+    const html = productos.map((producto, index) => {
+        const stockClass = producto.stock <= 0 ? 'text-danger' : producto.stock < 10 ? 'text-warning' : 'text-success';
+        const stockIcon = producto.stock <= 0 ? 'fa-times-circle' : producto.stock < 10 ? 'fa-exclamation-triangle' : 'fa-check-circle';
+        
+        let matchBadge = '';
+        switch(producto.match_tipo) {
+            case 'codigo_exacto':
+                matchBadge = '<span class="badge bg-success">Código exacto</span>';
+                break;
+            case 'codigo':
+                matchBadge = '<span class="badge bg-primary">Código</span>';
+                break;
+            case 'nombre_inicio':
+                matchBadge = '<span class="badge bg-info">Nombre</span>';
+                break;
+            default:
+                matchBadge = '<span class="badge bg-secondary">Descripción</span>';
+        }
+        
+        return `
+            <div class="sugerencia-item p-2 border-bottom cursor-pointer" 
+                 onclick="seleccionarProductoSugerencia(${producto.id})" 
+                 onmouseover="this.style.backgroundColor='#f8f9fa'" 
+                 onmouseout="this.style.backgroundColor='white'"
+                 data-index="${index}">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="flex-grow-1">
+                        <div><strong>${producto.codigo}</strong> - ${producto.nombre}</div>
+                        <div class="small text-muted">${producto.descripcion || 'Sin descripción'}</div>
+                        <div class="small">
+                            <span class="text-primary"><strong>$${producto.precio.toFixed(2)}</strong></span> | 
+                            <span class="${stockClass}">
+                                <i class="fas ${stockIcon}"></i> Stock: ${producto.stock}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="text-end">
+                        ${matchBadge}
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    contenedor.innerHTML = html;
+    contenedor.style.display = 'block';
+}
+
+function ocultarSugerencias() {
+    document.getElementById('sugerencias').style.display = 'none';
+}
+
+// Variables globales adicionales para ofertas
+let productosConOfertas = {}; // Cache de productos con sus ofertas
+
+// Función mejorada para seleccionar producto con ofertas
+function seleccionarProductoSugerencia(productoId) {
+    fetch(`/api/producto_por_id/${productoId}`)
+        .then(response => response.json())
+        .then(producto => {
+            if (producto.error) {
+                mostrarError('Error al cargar el producto');
+                return;
+            }
+               
+            // ================== NUEVO: USAR PESO DE BALANZA SI EXISTE ==================
+            const cantidad = pesoBalanza !== null ? pesoBalanza : 1.000;
+            console.log(`📦 Cantidad para agregar: ${cantidad} ${pesoBalanza !== null ? '(desde balanza)' : '(por defecto)'}`);
+            // ============================================================================
+            
+            // Cargar ofertas del producto si las tiene
+            if (producto.tiene_ofertas) {
+                cargarOfertasProducto(producto.id).then(() => {
+                    productoSeleccionado = producto;
+                    document.getElementById('buscar_producto').value = producto.codigo;
+                    ocultarSugerencias();
+                    
+                    if (cantidad > 0) {
+                        agregarProductoSeleccionado(producto, cantidad);
+                    }
+                    
+                    // ================== NUEVO: LIMPIAR PESO DESPUÉS DE USAR ==================
+                    pesoBalanza = null;
+                    // ==========================================================================
+                });
+            } else {
+                productoSeleccionado = producto;
+                document.getElementById('buscar_producto').value = producto.codigo;
+                ocultarSugerencias();
+                
+                if (cantidad > 0) {
+                    agregarProductoSeleccionado(producto, cantidad);
+                }
+                
+                // ================== NUEVO: LIMPIAR PESO DESPUÉS DE USAR ==================
+                pesoBalanza = null;
+                // ==========================================================================
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            mostrarError('Error al cargar el producto');
+            pesoBalanza = null;
+        });
+}
+
+// Nueva función para cargar ofertas de un producto
+function cargarOfertasProducto(productoId) {
+    return fetch(`/api/ofertas_producto/${productoId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.ofertas.length > 0) {
+                productosConOfertas[productoId] = {
+                    producto: data.producto,
+                    ofertas: data.ofertas
+                };
+                console.log(`✅ Cargadas ${data.ofertas.length} ofertas para producto ${productoId}`);
+            } else {
+                productosConOfertas[productoId] = {
+                    producto: data.producto || {},
+                    ofertas: []
+                };
+            }
+        })
+        .catch(error => {
+            console.error('Error cargando ofertas:', error);
+            productosConOfertas[productoId] = {
+                producto: {},
+                ofertas: []
+            };
+        });
+}
+
+// Función mejorada para obtener precio con ofertas
+// Función mejorada para obtener precio con ofertas (SIN IVA)
+// Función mejorada para obtener precio con ofertas (SIN IVA) - VERSIÓN CORREGIDA
+function obtenerPrecioConOferta(productoId, cantidad) {
+    const datosProducto = productosConOfertas[productoId];
+    
+    if (!datosProducto || !datosProducto.ofertas || datosProducto.ofertas.length === 0) {
+        // Si no hay ofertas en cache, usar precio base del producto original
+        const item = itemsVenta.find(i => i.producto_id === productoId);
+        
+        if (item && item.precio_unitario && !isNaN(item.precio_unitario)) {
+            // Ya tenemos el precio sin IVA
+            return item.precio_unitario;
+        }
+        
+        // Fallback: buscar el producto en la respuesta original
+        if (productoSeleccionado && productoSeleccionado.id === productoId) {
+            const precioConIva = productoSeleccionado.precio;
+            const ivaDecimal = productoSeleccionado.iva / 100;
+            return precioConIva / (1 + ivaDecimal);
+        }
+        
+        // Último fallback: hacer una llamada API síncrona (no recomendado pero funcional)
+        console.warn(`No hay precio disponible para producto ${productoId}, usando fallback`);
+        return 0;
+    }
+    
+    // Obtener precio base CON IVA desde las ofertas
+    const precioBaseConIva = datosProducto.producto.precio_base || datosProducto.producto.precio;
+    let mejorPrecioConIva = precioBaseConIva;
+    
+    // Buscar la mejor oferta aplicable
+    const ofertasAplicables = datosProducto.ofertas
+        .filter(oferta => oferta.activo && cantidad >= oferta.cantidad_minima)
+        .sort((a, b) => b.cantidad_minima - a.cantidad_minima);
+    
+    if (ofertasAplicables.length > 0) {
+        mejorPrecioConIva = ofertasAplicables[0].precio_oferta;
+    }
+    
+    // CONVERTIR: precio con IVA → precio sin IVA
+    const item = itemsVenta.find(i => i.producto_id === productoId);
+    const ivaDecimal = item ? item.iva / 100 : (datosProducto.producto.iva || 21) / 100;
+    const precioSinIva = mejorPrecioConIva / (1 + ivaDecimal);
+    
+    return precioSinIva;
+}
+
+
+function forzarCargaOfertas(productoId) {
+    console.log(`🔄 Forzando carga de ofertas para producto ${productoId}...`);
+    
+    return fetch(`/api/ofertas_producto/${productoId}`)
+        .then(response => response.json())
+        .then(data => {
+            console.log('Respuesta API ofertas:', data);
+            
+            if (data.success && data.ofertas.length > 0) {
+                productosConOfertas[productoId] = {
+                    producto: data.producto,
+                    ofertas: data.ofertas
+                };
+                console.log(`✅ Cargadas ${data.ofertas.length} ofertas para producto ${productoId}`);
+                console.log('Ofertas:', data.ofertas);
+                return true;
+            } else {
+                console.log('❌ No hay ofertas para este producto');
+                return false;
+            }
+        })
+        .catch(error => {
+            console.error('Error cargando ofertas:', error);
+            return false;
+        });
+}
+
+
+function seleccionarProductoPorId(productoId) {
+    fetch(`/api/producto_por_id/${productoId}`)
+        .then(response => response.json())
+        .then(producto => {
+            if (producto.error) {
+                mostrarError('Error al cargar el producto');
+                return;
+            }
+            
+            // ================== NUEVO: USAR PESO DE BALANZA SI EXISTE ==================
+            const cantidad = pesoBalanza !== null ? pesoBalanza : 1.000;
+            // ============================================================================
+            
+            // Cargar ofertas si las tiene
+            if (producto.tiene_ofertas) {
+                cargarOfertasProducto(producto.id).then(() => {
+                    productoSeleccionado = producto;
+                    agregarProductoSeleccionado(producto, cantidad);
+                    
+                    // Limpiar peso de balanza
+                    pesoBalanza = null;
+                });
+            } else {
+                productoSeleccionado = producto;
+                agregarProductoSeleccionado(producto, cantidad);
+                
+                // Limpiar peso de balanza
+                pesoBalanza = null;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            mostrarError('Error al cargar el producto');
+            pesoBalanza = null;
+        });
+}
+
+// Función mejorada para agregar producto con ofertas
+function agregarProductoSeleccionado(producto, cantidad) {
+    if (producto.stock < cantidad) {
+        mostrarError(`Stock insuficiente. Disponible: ${producto.stock}`);
+        return;
+    }
+    
+    // *** NUEVO: SIEMPRE CARGAR OFERTAS SI EL PRODUCTO LAS TIENE ***
+    if (producto.tiene_ofertas && !productosConOfertas[producto.id]) {
+        console.log(`🔄 Cargando ofertas para producto ${producto.codigo}...`);
+        cargarOfertasProducto(producto.id).then(() => {
+            // Procesar después de cargar ofertas
+            procesarAgregarProducto(producto, cantidad);
+        });
+        return;
+    }
+    
+    // Si ya tiene ofertas cargadas o no tiene ofertas, procesar directamente
+    procesarAgregarProducto(producto, cantidad);
+}
+
+// *** NUEVA FUNCIÓN: Procesar agregar producto (separada para reutilizar) ***
+function procesarAgregarProducto(producto, cantidad) {
+    // Verificar si el producto ya está en la venta
+    const existente = itemsVenta.find(item => item.producto_id === producto.id);
+    
+    // ================== NUEVO: NO SUMAR SI VIENE DE BALANZA ==================
+    const esProductoBalanza = pesoBalanza !== null;
+    // ==========================================================================
+    
+    if (existente && !esProductoBalanza) {
+        // Solo actualizar cantidad si NO es de balanza
+        existente.cantidad += cantidad;
+        
+        // Obtener precio SIN IVA
+        const nuevoPrecio = obtenerPrecioConOferta(producto.id, existente.cantidad);
+        
+        // Validar que el precio no sea NaN
+        if (!isNaN(nuevoPrecio) && nuevoPrecio > 0) {
+            existente.precio_unitario = nuevoPrecio;
+        }
+        
+        existente.subtotal = existente.cantidad * existente.precio_unitario;
+        
+        console.log(`📦 Cantidad actualizada: ${existente.cantidad} x ${producto.codigo}`);
+        mostrarMensajeExito(`Cantidad aumentada: ${existente.cantidad} unidades de ${producto.nombre}`);
+    } else {
+        // *** DECIDIR QUÉ PRECIO USAR SEGÚN LA LISTA DE PRECIOS ***
+        let precioBase;
+        const nombresListas = {1: 'Minorista', 2: 'Mayorista', 3: 'Distribuidor', 4: 'Especial', 5: 'Promocional'};
+        
+       // Obtener precio según lista (usando ?? para manejar null/undefined correctamente)
+        if (listaPrecioActiva === 2 && producto.precio2) {
+            precioBase = producto.precio2;
+        } else if (listaPrecioActiva === 3 && producto.precio3) {
+            precioBase = producto.precio3;
+        } else if (listaPrecioActiva === 4 && producto.precio4) {
+            precioBase = producto.precio4;
+        } else if (listaPrecioActiva === 5 && producto.precio5) {
+            precioBase = producto.precio5;
+        } else {
+            precioBase = producto.precio;
+        }
+
+        console.log('🔍 DEBUG Lista:', listaPrecioActiva);
+        console.log('🔍 DEBUG Precios del producto:', {
+            precio: producto.precio,
+            precio2: producto.precio2,
+            precio3: producto.precio3,
+            precio4: producto.precio4,
+            precio5: producto.precio5
+        });
+        console.log('🔍 DEBUG Precio seleccionado:', precioBase);
+        
+        // CALCULAR precio sin IVA
+        const ivaDecimal = producto.iva / 100;
+        const precioSinIva = precioBase / (1 + ivaDecimal);
+
+        console.log(`💰 Conversión: $${precioBase} (con IVA) → $${precioSinIva.toFixed(2)} (sin IVA)`);
+        
+        const item = {
+            id: contadorItems++,
+            producto_id: producto.id,
+            codigo: producto.codigo,
+            nombre: producto.nombre,
+            cantidad: parseFloat(cantidad.toFixed(3)),
+            precio_unitario: precioSinIva, // SIN IVA calculado desde el producto
+            precio_base: precioSinIva,
+            subtotal: parseFloat(cantidad.toFixed(3)) * precioSinIva,
+            iva: producto.iva,
+            lista_precio: listaPrecioActiva // Guardar qué lista se usó
+        };
+        
+        itemsVenta.push(item);
+
+        console.log(`✅ Producto agregado: ${cantidad} x ${producto.codigo}`);
+        console.log(`💰 Precio sin IVA: $${precioSinIva.toFixed(2)}`);
+        mostrarMensajeExito(`Producto agregado: ${cantidad} x ${producto.nombre}`);
+        
+        // DESPUÉS de agregar, verificar si hay ofertas y actualizar precio si es necesario
+        // *** SOLO APLICAR OFERTAS SI ES LISTA 1 (MINORISTA) ***
+        if (listaPrecioActiva === 1 && (producto.tiene_ofertas || productosConOfertas[producto.id])) {
+            const precioConOferta = obtenerPrecioConOferta(producto.id, cantidad);
+            if (!isNaN(precioConOferta) && precioConOferta > 0 && precioConOferta !== precioSinIva) {
+                item.precio_unitario = precioConOferta;
+                item.subtotal = item.cantidad * item.precio_unitario;
+                console.log(`🏷️ Precio actualizado con oferta: $${precioConOferta.toFixed(2)}`);
+            }
+        } else if (listaPrecioActiva > 1) {
+            console.log(`🏷️ Lista ${listaPrecioActiva} - No se aplican ofertas por volumen`);
+        }
+    
+        actualizarTablaVenta();
+        calcularTotales();
+     }
+    // Limpiar y preparar para siguiente producto
+    document.getElementById('buscar_producto').value = '';
+    document.getElementById('buscar_producto').focus();
+    productoSeleccionado = null;
+    
+    // ================== NUEVO: LIMPIAR PESO ACÁ TAMBIÉN ==================
+    pesoBalanza = null;
+    // ======================================================================
+}
+
+// Función auxiliar para validar precios
+function validarPrecio(precio, contexto = '') {
+    if (isNaN(precio) || precio <= 0) {
+        console.error(`❌ Precio inválido en ${contexto}: ${precio}`);
+        return false;
+    }
+    return true;
+}
+
+
+// NUEVA función auxiliar que decide el precio
+function obtenerPrecioFinal(producto, cantidad) {
+    // Si no hay ofertas disponibles, devolver precio normal
+    if (!producto.ofertas_disponibles || producto.ofertas_disponibles.length === 0) {
+        return producto.precio;
+    }
+    
+    // Buscar la mejor oferta aplicable
+    let mejor_precio = producto.precio;
+    
+    for (let oferta of producto.ofertas_disponibles) {
+        if (cantidad >= oferta.cantidad_minima && oferta.precio_oferta < mejor_precio) {
+            mejor_precio = oferta.precio_oferta;
+        }
+    }
+    
+    return mejor_precio;
+}
+
+// =====================================================================
+// FUNCIÓN agregarProducto() MODIFICADA CON SOPORTE PARA BALANZA
+// Reemplaza desde la línea 918 hasta la línea 975 (completa)
+// =====================================================================
+function agregarProducto() {
+    let codigo = document.getElementById('buscar_producto').value.trim();
+    
+    // ================== NUEVO: DETECTAR CÓDIGO DE BALANZA Y EXTRAER CÓDIGO REAL ==================
+    const infoBalanza = detectarCodigoBalanza(codigo);
+    
+    if (infoBalanza.esBalanza) {
+        pesoBalanza = infoBalanza.peso;
+        codigo = infoBalanza.codigoProducto; // ← USAR EL CÓDIGO REAL
+        console.log(`⚖️ Código de balanza detectado, usando código: ${codigo}, peso: ${pesoBalanza} kg`);
+    }
+    
+    const cantidad = pesoBalanza !== null ? pesoBalanza : 1.000;
+    // ================================================================================================
+    
+    if (pesoBalanza !== null) {
+        console.log(`⚖️ Usando peso de balanza: ${pesoBalanza} kg`);
+    }
+    
+    if (!codigo) {
+        mostrarError('Ingrese un código de producto o seleccione de las sugerencias');
+        return;
+    }
+    
+    // Si hay un producto seleccionado de las sugerencias, usar ese
+    if (productoSeleccionado && productoSeleccionado.codigo === codigo) {
+        agregarProductoSeleccionado(productoSeleccionado, cantidad);
+        // ================== NUEVO: LIMPIAR PESO DESPUÉS DE USAR ==================
+        pesoBalanza = null;
+        // ==========================================================================
+        return;
+    }
+    
+    // Buscar producto por código exacto
+    fetch(`/api/producto/${codigo}`)
+        .then(response => response.json())
+        .then(producto => {
+            if (producto.error) {
+                // Si no se encuentra por código exacto, buscar sugerencias
+                fetch(`/api/buscar_productos/${encodeURIComponent(codigo)}`)
+                    .then(response => response.json())
+                    .then(productos => {
+                        if (productos.length === 1) {
+                            // Si solo hay una sugerencia, cargar ofertas y usar
+                            const prod = productos[0];
+                            if (prod.tiene_ofertas) {
+                                cargarOfertasProducto(prod.id).then(() => {
+                                    agregarProductoSeleccionado(prod, cantidad);
+                                    // ================== NUEVO: LIMPIAR PESO ==================
+                                    pesoBalanza = null;
+                                    // =========================================================
+                                });
+                            } else {
+                                agregarProductoSeleccionado(prod, cantidad);
+                                // ================== NUEVO: LIMPIAR PESO ==================
+                                pesoBalanza = null;
+                                // =========================================================
+                            }
+                        } else if (productos.length > 1) {
+                            mostrarError(`Se encontraron ${productos.length} productos. Seleccione uno de las sugerencias.`);
+                            mostrarSugerencias(productos);
+                            // ================== NUEVO: LIMPIAR PESO EN ERROR ==================
+                            pesoBalanza = null;
+                            // ==================================================================
+                        } else {
+                            mostrarError('Producto no encontrado');
+                            // ================== NUEVO: LIMPIAR PESO EN ERROR ==================
+                            pesoBalanza = null;
+                            // ==================================================================
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error en búsqueda:', error);
+                        mostrarError('Error al buscar el producto');
+                        // ================== NUEVO: LIMPIAR PESO EN ERROR ==================
+                        pesoBalanza = null;
+                        // ==================================================================
+                    });
+                return;
+            }
+            
+            // Producto encontrado - cargar ofertas si las tiene
+            if (producto.tiene_ofertas) {
+                cargarOfertasProducto(producto.id).then(() => {
+                    agregarProductoSeleccionado(producto, cantidad);
+                    // ================== NUEVO: LIMPIAR PESO ==================
+                    pesoBalanza = null;
+                    // =========================================================
+                });
+            } else {
+                agregarProductoSeleccionado(producto, cantidad);
+                // ================== NUEVO: LIMPIAR PESO ==================
+                pesoBalanza = null;
+                // =========================================================
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            mostrarError('Error al buscar el producto');
+            // ================== NUEVO: LIMPIAR PESO EN ERROR ==================
+            pesoBalanza = null;
+            // ==================================================================
+        });
+}
+
+// Función mejorada para actualizar tabla con indicadores de oferta
+// Función mejorada para actualizar tabla con indicadores de oferta
+function actualizarTablaVenta() {
+    const tbody = document.getElementById('items_venta');
+    const mensajeVacio = document.getElementById('mensaje_vacio');
+    
+    if (itemsVenta.length === 0) {
+        tbody.innerHTML = '';
+        mensajeVacio.style.display = 'block';
+        return;
+    }
+    
+    mensajeVacio.style.display = 'none';
+    
+    // INVERTIR EL ORDEN - El último agregado primero
+    const itemsInvertidos = [...itemsVenta].reverse();
+    
+    tbody.innerHTML = itemsInvertidos.map(item => {
+        item.subtotal = item.cantidad * item.precio_unitario;
+        
+        const ivaDecimal = item.iva / 100;
+        const precio_con_iva = item.precio_unitario * (1 + ivaDecimal);
+        
+        const datosProducto = productosConOfertas[item.producto_id];
+        let indicadorOferta = '';
+        let clasePrecio = '';
+        
+        if (datosProducto && datosProducto.ofertas.length > 0) {
+            const precioBaseConIva = datosProducto.producto.precio_base || datosProducto.producto.precio;
+            
+            if (precio_con_iva < precioBaseConIva) {
+                const descuento = ((precioBaseConIva - precio_con_iva) / precioBaseConIva) * 100;
+                indicadorOferta = `<br><small class="text-success">🏷️ Oferta activa (-${descuento.toFixed(1)}%)</small>`;
+                clasePrecio = 'text-success fw-bold';
+            }
+        }
+        
+        return `
+        <tr>
+            <td><code>${item.codigo}</code></td>
+            <td>
+                ${item.nombre}
+                ${indicadorOferta}
+            </td>
+            <td>
+                <input type="number" class="form-control cantidad-input" value="${item.cantidad.toFixed(3)}"
+                       min="0.001" step="0.001"
+                       onblur="actualizarCantidad(${item.id}, this.value)"
+                       onkeypress="manejarEnterCantidad(event, ${item.id})"
+                       style="width: 100px;">
+            </td>
+            <td class="text-end ${clasePrecio}">
+                $${precio_con_iva.toFixed(2)}<br>
+                <small class="text-muted">(Sin IVA: $${item.precio_unitario.toFixed(2)})</small>
+            </td>
+            <td class="text-end"><strong>$${item.subtotal.toFixed(2)}</strong></td>
+            <td>
+                <button type="button" class="btn btn-danger btn-sm" onclick="eliminarItem(${item.id})">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        </tr>
+        `;
+    }).join('');
+}
+
+
+function manejarEnterCantidad(event, itemId) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        
+        // Actualizar la cantidad primero
+        actualizarCantidad(itemId, event.target.value);
+        
+        // Simular comportamiento de TAB - ir al siguiente input
+        const todosLosInputs = document.querySelectorAll('.cantidad-input');
+        const inputActual = event.target;
+        const indiceActual = Array.from(todosLosInputs).indexOf(inputActual);
+        
+        if (indiceActual < todosLosInputs.length - 1) {
+            // Si hay un siguiente input, enfocarlo y seleccionar texto
+            setTimeout(() => {
+                todosLosInputs[indiceActual + 1].focus();
+                todosLosInputs[indiceActual + 1].select();
+            }, 50);
+        } else {
+            // Si es el último, enfocar el campo de búsqueda de productos
+            setTimeout(() => {
+                document.getElementById('buscar_producto').focus();
+            }, 50);
+        }
+    }
+}
+
+function actualizarCantidad(itemId, nuevaCantidadStr) {
+    const item = itemsVenta.find(i => i.id === itemId);
+    if (!item) return;
+    
+    // Convertir a número y asegurar mínimo 0.001
+    let nuevaCantidad = parseFloat(nuevaCantidadStr);
+    
+    if (isNaN(nuevaCantidad) || nuevaCantidad <= 0) {
+        nuevaCantidad = 0.001;
+    }
+    
+    nuevaCantidad = Math.round(nuevaCantidad * 1000) / 1000;
+    
+    // *** NUEVO: RESPETAR TIPO DE PRECIO DEL CLIENTE ***
+    // Si es cliente mayorista (precio de costo), NO aplicar ofertas
+    if (tipoPrecioActivo === 'costo') {
+        console.log('💰 Cliente mayorista: mantener precio de costo');
+        item.cantidad = nuevaCantidad;
+        // Mantener el precio_unitario original (que ya es el precio de costo sin IVA)
+        item.subtotal = item.cantidad * item.precio_unitario;
+        actualizarTablaVenta();
+        calcularTotales();
+        return;
+    }
+    
+    // *** SOLO PARA CLIENTES MINORISTAS: Aplicar ofertas por volumen ***
+    // Si no hay ofertas cargadas, cargarlas primero
+    if (!productosConOfertas[item.producto_id]) {
+        cargarOfertasProducto(item.producto_id).then(() => {
+            // Obtener precio SIN IVA (la función ya hace la conversión)
+            const nuevoPrecio = obtenerPrecioConOferta(item.producto_id, nuevaCantidad);
+            item.cantidad = nuevaCantidad;
+            item.precio_unitario = nuevoPrecio;
+            item.subtotal = item.cantidad * item.precio_unitario;
+            actualizarTablaVenta();
+            calcularTotales();
+        });
+    } else {
+        // Obtener precio SIN IVA (la función ya hace la conversión)
+        const nuevoPrecio = obtenerPrecioConOferta(item.producto_id, nuevaCantidad);
+        item.cantidad = nuevaCantidad;
+        item.precio_unitario = nuevoPrecio;
+        item.subtotal = item.cantidad * item.precio_unitario;
+        actualizarTablaVenta();
+        calcularTotales();
+    }
+}
+
+
+// Agregar esta función después de actualizarCantidad()
+function cambiarCantidad(itemId, incremento) {
+    const item = itemsVenta.find(i => i.id === itemId);
+    if (!item) return;
+    
+    // Mantener 3 decimales y usar incrementos más pequeños
+    const nuevaCantidad = Math.max(0.001, parseFloat((item.cantidad + incremento).toFixed(3)));
+    actualizarCantidad(itemId, nuevaCantidad);
+}
+
+
+// Función para cargar ofertas de productos de acceso rápido al iniciar
+function cargarTodasLasOfertas() {
+    console.log('Cargando todas las ofertas por volumen...');
+    
+    fetch('/api/productos_con_ofertas_volumen')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Cargar todas las ofertas en el cache
+                Object.keys(data.productos_ofertas).forEach(productoId => {
+                    productosConOfertas[productoId] = data.productos_ofertas[productoId];
+                });
+                
+                console.log(`Cargadas ofertas para ${data.total_productos} productos`);
+            } else {
+                console.error('Error cargando ofertas:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error en carga masiva de ofertas:', error);
+        });
+}
+
+// Cache con timestamp para invalidación
+const CACHE_DURACION = 5 * 60 * 1000; // 5 minutos
+let cacheOfertas = {
+    datos: {},
+    timestamp: null
+};
+
+function isCacheValido() {
+    if (!cacheOfertas.timestamp) return false;
+    return (Date.now() - cacheOfertas.timestamp) < CACHE_DURACION;
+}
+
+function obtenerOfertasConCache(productoId) {
+    // Si el cache general está vencido, invalidar todo
+    if (!isCacheValido()) {
+        productosConOfertas = {};
+        cacheOfertas = { datos: {}, timestamp: null };
+    }
+    
+    // Si el producto específico no está en cache, cargarlo
+    if (!productosConOfertas[productoId]) {
+        return cargarOfertasProducto(productoId);
+    }
+    
+    return Promise.resolve();
+}
+
+function inicializarCacheOfertas() {
+    console.log('Inicializando sistema de ofertas...');
+    // Solo cargar ofertas si es necesario
+    if (typeof cargarTodasLasOfertas === 'function') {
+        cargarTodasLasOfertas();
+    }
+}
+
+// NUEVA función para encontrar producto por ID en los resultados de búsqueda
+function buscarProductoPorId(productoId) {
+    // Si tenemos el producto seleccionado y coincide el ID
+    if (productoSeleccionado && productoSeleccionado.id === productoId) {
+        return productoSeleccionado;
+    }
+    
+    // Si no, devolver un producto básico sin ofertas
+    // Esto permite que funcione aunque no tengamos el producto completo
+    return null;
+}
+
+function eliminarItem(itemId) {
+    if (confirm('¿Eliminar este producto de la venta?')) {
+        itemsVenta = itemsVenta.filter(item => item.id !== itemId);
+        actualizarTablaVenta();
+        calcularTotales();
+    }
+}
+
+function calcularTotales() {
+    const subtotal = itemsVenta.reduce((sum, item) => sum + item.subtotal, 0);
+    
+    // ✅ USAR método AFIP
+    const iva = calcularIVAAFIP();
+    const total = subtotal + iva;
+    
+    // Actualizar displays
+    document.getElementById('subtotal_display').textContent = `${subtotal.toFixed(2)}`;
+    document.getElementById('iva_display').textContent = `${iva.toFixed(2)}`;
+    document.getElementById('total_display').textContent = `${total.toFixed(2)}`;
+    
+    // Actualizar etiqueta de IVA
+    actualizarEtiquetaIVA();
+    
+    // 🔍 DEBUG
+    console.log('💰 Totales calculados:', { subtotal, iva, total });
+}
+
+// *** NUEVA FUNCIÓN: Actualizar etiqueta de IVA ***
+function actualizarEtiquetaIVA() {
+    const ivaLabel = document.getElementById('iva_label');
+    
+    if (itemsVenta.length === 0) {
+        ivaLabel.textContent = 'IVA:';
+        return;
+    }
+    
+    // Obtener todas las alícuotas únicas
+    const alicuotas = [...new Set(itemsVenta.map(item => item.iva))];
+    
+    if (alicuotas.length === 1) {
+        // Solo una alícuota
+        const alicuota = alicuotas[0];
+        if (alicuota === 0) {
+            ivaLabel.textContent = 'IVA (Exento):';
+        } else {
+            ivaLabel.textContent = `IVA (${alicuota}%):`;
+        }
+    } else if (alicuotas.length > 1) {
+        // Múltiples alícuotas
+        const alicuotasTexto = alicuotas.sort((a, b) => b - a).join('%, ') + '%';
+        ivaLabel.innerHTML = `IVA <small>(${alicuotasTexto})</small>:`;
+    } else {
+        ivaLabel.textContent = 'IVA:';
+    }
+}
+
+function procesarVenta() {
+    if (itemsVenta.length === 0) {
+        mostrarError('Debe agregar al menos un producto a la venta');
+        return;
+    }
+    
+    const subtotal = itemsVenta.reduce((sum, item) => sum + item.subtotal, 0);
+    const iva = calcularIVAAFIP();
+    totalVenta = subtotal + iva;
+    
+    // Limpiar medios de pago anteriores
+    mediosPagoIngresados = [];
+    contadorMediosPago = 0;
+    
+    // Mostrar modal de medios de pago (COMO ESTABA ANTES)
+    mostrarModalMediosPago();
+}
+// ==========================================
+// FUNCIONES DE MEDIOS DE PAGO QUE FALTAN
+// ==========================================
+
+function mostrarModalMediosPago() {
+    // Resetear datos
+    mediosPagoIngresados = [];
+    contadorMediosPago = 0;
+    
+    // Mostrar total a pagar
+    document.getElementById('total_a_pagar').textContent = formatearMoneda(totalVenta);
+    
+    // Limpiar formulario
+    document.getElementById('medio_pago_select').value = '';
+    document.getElementById('importe_pago').value = '';
+    
+    // Actualizar displays
+    actualizarTablaMediosPago();
+    actualizarResumenPago();
+    
+    // Mostrar modal
+    const modal = new bootstrap.Modal(document.getElementById('modalMediosPago'));
+    modal.show();
+    
+    // Focus en selector de medio
+    setTimeout(() => {
+        document.getElementById('medio_pago_select').focus();
+    }, 500);
+}
+
+function agregarMedioPago() {
+    const medioSelect = document.getElementById('medio_pago_select');
+    const importeInput = document.getElementById('importe_pago');
+    
+    const medio = medioSelect.value;
+    const importeIngresado = parseFloat(importeInput.value) || 0;
+
+    // ═══ AGREGAR ESTA VALIDACIÓN ═══
+    // Si el medio es CTA.CTE, validar cliente y tipo de comprobante
+    if (medio === 'CTA.CTE') {
+        const clienteSelect = document.getElementById('cliente_select');
+        const clienteId = clienteSelect.value;
+        const tipoComprobante = document.getElementById('tipo_comprobante').value;
+        const opcionCliente = clienteSelect.selectedOptions[0];
+        const documentoCliente = opcionCliente.getAttribute('data-documento');
+        
+        // No permitir Consumidor Final
+        if (!clienteId || clienteId === '1') {
+            Swal.fire({
+                icon: 'error',
+                title: 'Cliente inválido',
+                html: '<b>No puede usar CTA.CTE con Consumidor Final</b><br><br>Debe seleccionar un cliente específico.',
+                confirmButtonColor: '#dc3545'
+            });
+            medioSelect.value = '';
+            medioSelect.focus();
+            return;
+        }
+        
+        // Validar CUIT para Factura A
+        if (tipoComprobante === '01') {  // Factura A
+            if (!documentoCliente || documentoCliente.length !== 11) {
+               Swal.fire({
+                    icon: 'error',
+                    title: 'CUIT requerido',
+                    html: '<b>Para CTA.CTE con Factura A, el cliente DEBE tener CUIT válido (11 dígitos)</b><br><br>' +
+                        'Este cliente no cumple el requisito.<br><br>' +
+                        '<b>Opciones:</b><br>' +
+                        '1. Seleccionar cliente con CUIT<br>' +
+                        '2. Cambiar a Factura B o C',
+                    confirmButtonColor: '#dc3545',
+                    width: '600px'
+                });
+                medioSelect.value = '';
+                medioSelect.focus();
+                return;
+            }
+        }
+        
+        // Validar que tenga al menos algún documento para Factura B
+        if (tipoComprobante === '06') {  // Factura B
+            if (!documentoCliente || documentoCliente.length < 7) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Documento requerido',
+                    html: '<b>Para CTA.CTE con Factura B, el cliente debe tener documento válido</b><br><br>' +
+                        '<b>Opciones:</b><br>' +
+                        '1. Editar cliente y agregar documento<br>',
+                    confirmButtonColor: '#dc3545',
+                    width: '600px'
+                });
+                      
+                medioSelect.value = '';
+                medioSelect.focus();
+                return;
+            }
+        }
+    }
+    // ═══ FIN DE VALIDACIÓN ═══
+
+    
+    // Validaciones básicas
+    if (!medio) {
+        mostrarError('Seleccione un medio de pago');
+        medioSelect.focus();
+        return;
+    }
+    
+    if (importeIngresado <= 0) {
+        mostrarError('El importe debe ser mayor a cero');
+        importeInput.focus();
+        return;
+    }
+    
+    // Calcular cuánto falta pagar (considerando descuentos)
+    const totalIngresado = mediosPagoIngresados.reduce((sum, mp) => sum + mp.importe, 0);
+    const totalAPagar = totalVenta - montoDescuento;
+    const faltante = totalAPagar - totalIngresado;
+    
+    console.log('=== DEBUG AGREGAR MEDIO ===');
+    console.log('Total a pagar (con descuento):', totalAPagar);
+    console.log('Ya ingresado:', totalIngresado);
+    console.log('Faltante:', faltante);
+    console.log('Importe ingresado:', importeIngresado);
+    console.log('Medio:', medio);
+    
+    // LÓGICA ESPECIAL PARA EFECTIVO CON VUELTO
+    if (medio === 'efectivo') {
+        // Para efectivo, siempre permitir el importe completo (para calcular vuelto)
+        const medioPago = {
+            id: contadorMediosPago++,
+            medio: medio,
+            medio_nombre: getMedioNombre(medio),
+            medio_icono: getMedioIcono(medio),
+            importe: Math.min(importeIngresado, totalAPagar), // Lo que realmente se aplica al pago
+            importe_original: importeIngresado, // Lo que el cliente entregó
+            es_efectivo_con_vuelto: importeIngresado > totalAPagar
+        };
+        
+        mediosPagoIngresados.push(medioPago);
+        
+        const vuelto = Math.max(0, importeIngresado - totalAPagar);
+        
+        if (vuelto > 0) {
+            mostrarMensajeExito(`Efectivo: $${importeIngresado.toFixed(2)} - Vuelto: $${vuelto.toFixed(2)}`);
+        } else {
+            mostrarMensajeExito(`Efectivo agregado: $${importeIngresado.toFixed(2)}`);
+        }
+    } else {
+        // Para otros medios de pago, no permitir exceso
+        if (importeIngresado > faltante * 1.1) { // 10% de tolerancia
+            mostrarError(`El importe excede el faltante ($${faltante.toFixed(2)}). Para otros medios de pago no se puede dar vuelto.`);
+            return;
+        }
+        
+        const medioPago = {
+            id: contadorMediosPago++,
+            medio: medio,
+            medio_nombre: getMedioNombre(medio),
+            medio_icono: getMedioIcono(medio),
+            importe: importeIngresado,
+            importe_original: importeIngresado,
+            es_efectivo_con_vuelto: false
+        };
+        
+        mediosPagoIngresados.push(medioPago);
+        mostrarMensajeExito(`Agregado: ${medioPago.medio_nombre} $${importeIngresado.toFixed(2)}`);
+    }
+    
+    // Actualizar displays
+    actualizarTablaMediosPago();
+    actualizarResumenPago();
+    
+    // Limpiar formulario
+    medioSelect.value = '';
+    importeInput.value = '';
+    medioSelect.focus();
+}
+
+
+
+function eliminarMedioPago(id) {
+    if (confirm('¿Eliminar este medio de pago?')) {
+        mediosPagoIngresados = mediosPagoIngresados.filter(mp => mp.id !== id);
+        actualizarTablaMediosPago();
+        actualizarResumenPago();
+    }
+}
+
+function actualizarTablaMediosPago() {
+    const tbody = document.getElementById('tabla_medios_pago');
+    const mensajeSinMedios = document.getElementById('mensaje_sin_medios');
+    
+    if (mediosPagoIngresados.length === 0) {
+        tbody.innerHTML = '';
+        mensajeSinMedios.style.display = 'block';
+        return;
+    }
+    
+    mensajeSinMedios.style.display = 'none';
+    
+    tbody.innerHTML = mediosPagoIngresados.map(mp => `
+        <tr class="medio-pago-nuevo">
+            <td>
+                <i class="${mp.medio_icono}"></i> ${mp.medio_nombre}
+            </td>
+            <td class="text-end">
+                <strong>${mp.importe.toFixed(2)}</strong>
+            </td>
+            <td class="text-center">
+                <button type="button" class="btn btn-danger btn-sm" onclick="eliminarMedioPago(${mp.id})">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function actualizarResumenPago() {
+    const totalIngresadoReal = mediosPagoIngresados.reduce((sum, mp) => sum + mp.importe, 0);
+    const totalAPagar = totalVenta - montoDescuento;
+    const diferencia = totalIngresadoReal - totalAPagar;
+    
+    // Calcular vuelto para efectivo
+    let vueltoTotal = 0;
+    let efectivoRecibidoTotal = 0;
+    
+    mediosPagoIngresados.forEach(mp => {
+        if (mp.medio === 'efectivo') {
+            efectivoRecibidoTotal += mp.importe_original;
+            if (mp.es_efectivo_con_vuelto) {
+                vueltoTotal += (mp.importe_original - mp.importe);
+            }
+        }
+    });
+    
+    console.log('=== DEBUG RESUMEN ACTUALIZADO ===');
+    console.log('Total a pagar:', totalAPagar);
+    console.log('Total ingresado (real):', totalIngresadoReal);
+    console.log('Efectivo recibido total:', efectivoRecibidoTotal);
+    console.log('Vuelto total:', vueltoTotal);
+    console.log('Diferencia:', diferencia);
+    
+    // Actualizar displays
+    document.getElementById('total_ingresado').textContent = formatearMoneda(totalIngresadoReal);
+    
+    const diferenciasSpan = document.getElementById('diferencia_pago');
+    const estadoPago = document.getElementById('estado_pago');
+    const btnConfirmar = document.getElementById('btn_confirmar_pago');
+    
+    // Lógica de estado de pago
+    if (Math.abs(diferencia) < 0.01) {
+        // Pago exacto o completo con vuelto
+        if (vueltoTotal > 0) {
+            diferenciasSpan.innerHTML = `✅ Completo <span class="text-warning">(Vuelto: ${formatearMoneda(vueltoTotal)})</span>`;
+            estadoPago.innerHTML = '<span class="badge bg-warning text-dark">💰 Entregar vuelto</span>';
+            mostrarSeccionVuelto(efectivoRecibidoTotal, vueltoTotal);
+        } else {
+            diferenciasSpan.textContent = formatearMoneda(0);
+            estadoPago.innerHTML = '<span class="badge bg-success">✅ Pago completo</span>';
+            ocultarSeccionVuelto();
+        }
+        diferenciasSpan.className = 'h5 diferencia-cero';
+        btnConfirmar.disabled = false;
+        
+    } else if (diferencia > 0.01) {
+        // Sobrepago - esto no debería pasar con la nueva lógica
+        diferenciasSpan.innerHTML = `⚠️ Sobrepago: ${formatearMoneda(diferencia)}`;
+        diferenciasSpan.className = 'h5 diferencia-negativa';
+        estadoPago.innerHTML = '<span class="badge bg-danger">❌ Error en cálculo</span>';
+        btnConfirmar.disabled = true;
+        ocultarSeccionVuelto();
+        
+    } else {
+        // Falta dinero
+        const faltante = Math.abs(diferencia);
+        diferenciasSpan.textContent = `❌ Faltan ${formatearMoneda(faltante)}`;
+        diferenciasSpan.className = 'h5 diferencia-negativa';
+        estadoPago.innerHTML = `<span class="badge bg-danger">❌ Faltan ${formatearMoneda(faltante)}</span>`;
+        btnConfirmar.disabled = true;
+        ocultarSeccionVuelto();
+    }
+}
+
+
+
+function mostrarSeccionVuelto(efectivoRecibido, vuelto) {
+    document.getElementById('efectivo_recibido').textContent = efectivoRecibido.toFixed(2);
+    document.getElementById('vuelto_cantidad').textContent = vuelto.toFixed(2);
+    document.getElementById('seccion_vuelto').style.display = 'block';
+    
+    console.log('👀 Mostrando sección de vuelto:', { efectivoRecibido, vuelto });
+}
+
+function ocultarSeccionVuelto() {
+    document.getElementById('seccion_vuelto').style.display = 'none';
+}
+
+function completarConEfectivo() {
+    const totalIngresado = mediosPagoIngresados.reduce((sum, mp) => sum + mp.importe, 0);
+    const totalAPagar = totalVenta - montoDescuento;
+    const faltante = totalAPagar - totalIngresado;
+    
+    if (faltante <= 0) {
+        mostrarError('El pago ya está completo');
+        return;
+    }
+    
+    document.getElementById('medio_pago_select').value = 'efectivo';
+    // Para efectivo, sugerir el faltante pero permitir modificación para vuelto
+    document.getElementById('importe_pago').value = faltante.toFixed(2);
+    document.getElementById('importe_pago').focus();
+    document.getElementById('importe_pago').select(); // Seleccionar para fácil edición
+}
+
+function completarConTarjeta(tipoTarjeta) {
+    const totalIngresado = mediosPagoIngresados.reduce((sum, mp) => sum + mp.importe, 0);
+    const totalAPagar = totalVenta - montoDescuento;
+    const faltante = totalAPagar - totalIngresado;
+    
+    if (faltante <= 0) {
+        mostrarError('El pago ya está completo');
+        return;
+    }
+    
+    document.getElementById('medio_pago_select').value = tipoTarjeta;
+    document.getElementById('importe_pago').value = faltante.toFixed(2);
+    document.getElementById('importe_pago').focus();
+}
+
+function completarConMercadoPago() {
+    const totalIngresado = mediosPagoIngresados.reduce((sum, mp) => sum + mp.importe, 0);
+    const totalAPagar = totalVenta - montoDescuento;
+    const faltante = totalAPagar - totalIngresado;
+    
+    if (faltante <= 0) {
+        mostrarError('El pago ya está completo');
+        return;
+    }
+    
+    document.getElementById('medio_pago_select').value = 'mercado_pago';
+    document.getElementById('importe_pago').value = faltante.toFixed(2);
+    document.getElementById('importe_pago').focus();
+}
+
+function limpiarMediosPago() {
+    if (mediosPagoIngresados.length > 0) {
+        if (confirm('¿Limpiar todos los medios de pago ingresados?')) {
+            mediosPagoIngresados = [];
+            actualizarTablaMediosPago();
+            actualizarResumenPago();
+        }
+    }
+}
+
+function cancelarMediosPago() {
+    const modal = bootstrap.Modal.getInstance(document.getElementById('modalMediosPago'));
+    modal.hide();
+}
+
+function confirmarMediosPago() {
+    if (mediosPagoIngresados.length === 0) {
+        mostrarError('Debe agregar al menos un medio de pago');
+        return;
+    }
+    
+    const totalIngresado = mediosPagoIngresados.reduce((sum, mp) => sum + mp.importe, 0);
+    const totalAPagar = totalVenta - montoDescuento;
+    const diferencia = totalIngresado - totalAPagar;
+    
+    console.log('=== DEBUG CONFIRMACIÓN FINAL ===');
+    console.log('Total a pagar:', totalAPagar);
+    console.log('Total ingresado:', totalIngresado);
+    console.log('Diferencia:', diferencia);
+    console.log('Medios de pago:', mediosPagoIngresados);
+    
+    // Verificar que el pago esté completo (permitir exacto o con vuelto en efectivo)
+    if (diferencia < -0.01) {
+        const faltante = Math.abs(diferencia);
+        mostrarError(`Faltan $${faltante.toFixed(2)} para completar el pago`);
+        return;
+    }
+    
+    // Si todo está bien, procesar
+    const modal = bootstrap.Modal.getInstance(document.getElementById('modalMediosPago'));
+    modal.hide();
+    
+    procesarVentaConMediosPago();
+}
+
+function getMedioNombre(codigo) {
+    const medios = {
+        'efectivo': 'Efectivo',
+        'credito': 'Tarjeta de Crédito',
+        'debito': 'Tarjeta de Débito',
+        'mercado_pago': 'Mercado Pago',
+        'transferencia': 'Transferencia',
+        'cheque': 'Cheque'
+    };
+    return medios[codigo] || codigo;
+}
+
+function getMedioIcono(codigo) {
+    const iconos = {
+        'efectivo': 'fas fa-money-bill-wave',
+        'credito': 'fas fa-credit-card',
+        'debito': 'fas fa-credit-card',
+        'mercado_pago': 'fas fa-mobile-alt',
+        'transferencia': 'fas fa-exchange-alt',
+        'cheque': 'fas fa-money-check'
+    };
+    return iconos[codigo] || 'fas fa-credit-card';
+}
+
+// Formatear números como moneda
+function formatearMoneda(valor) {
+    return new Intl.NumberFormat('es-AR', {
+        style: 'currency',
+        currency: 'ARS'
+    }).format(valor);
+}
+
+// ==========================================
+// FUNCIONES ADICIONALES QUE FALTAN
+// ==========================================
+
+function actualizarTipoComprobante() {
+    const clienteSelect = document.getElementById('cliente_select');
+    const tipoComprobante = document.getElementById('tipo_comprobante');
+    const infoCliente = document.getElementById('info_cliente');
+    const listaPrecioSelect = document.getElementById('lista_precio_select');
+    
+    const selectedOption = clienteSelect.selectedOptions[0];
+    const condicionIva = selectedOption.getAttribute('data-condicion');
+    const listaCliente = selectedOption.getAttribute('data-lista-precio') || '1';
+    const nombreCliente = selectedOption.text;
+    
+    // Guardar lista anterior para comparar
+    const listaAnterior = listaPrecioActiva;
+    
+    // Actualizar lista de precios según cliente
+    listaPrecioActiva = parseInt(listaCliente);
+    if (listaPrecioSelect) {
+        listaPrecioSelect.value = listaCliente;
+    }
+    
+    console.log('Cliente: ' + nombreCliente + ' - Lista: ' + listaPrecioActiva);
+    
+    // Obtener nombre y color de la lista
+    const nombresListas = {1: 'Minorista', 2: 'Mayorista', 3: 'Distribuidor', 4: 'Especial', 5: 'Promocional'};
+    const coloresListas = {1: 'primary', 2: 'success', 3: 'info', 4: 'warning', 5: 'danger'};
+    const nombreLista = nombresListas[listaPrecioActiva] || 'Minorista';
+    const colorBadge = coloresListas[listaPrecioActiva] || 'primary';
+    
+    // Actualizar información del cliente
+    infoCliente.innerHTML = nombreCliente + 
+        '<br><small class="text-muted">Condición: ' + condicionIva.replace(/_/g, ' ') + '</small>' +
+        '<br><span class="badge bg-' + colorBadge + ' mt-1">📋 Lista ' + listaPrecioActiva + ' - ' + nombreLista + '</span>';
+    
+    // Si hay productos y cambió la lista, preguntar si recalcular
+    if (itemsVenta.length > 0 && listaAnterior !== listaPrecioActiva) {
+        if (confirm('Cambiaste de cliente. Lista de precios: ' + nombreLista + '.\n\n¿Recalcular precios de los ' + itemsVenta.length + ' productos?')) {
+            recalcularTodosLosPrecios();
+        }
+    }
+    
+    // Tipo de comprobante
+    if (condicionIva === 'IVA_RESPONSABLE_INSCRIPTO') {
+        tipoComprobante.value = '01';
+    } else if (condicionIva === 'MONOTRIBUTISTA') {
+        tipoComprobante.value = '06';
+    } else {
+        tipoComprobante.value = '06';
+    }
+}
+
+// Función para cambiar lista de precios manualmente
+function cambiarListaPrecio() {
+    const listaPrecioSelect = document.getElementById('lista_precio_select');
+    const nuevaLista = parseInt(listaPrecioSelect.value);
+    
+    if (nuevaLista === listaPrecioActiva) return;
+    
+    const nombresListas = {1: 'Minorista', 2: 'Mayorista', 3: 'Distribuidor', 4: 'Especial', 5: 'Promocional'};
+    const nombreLista = nombresListas[nuevaLista];
+    
+    listaPrecioActiva = nuevaLista;
+    console.log('Lista de precios cambiada a: ' + listaPrecioActiva + ' (' + nombreLista + ')');
+    
+    // Actualizar info del cliente
+    const infoCliente = document.getElementById('info_cliente');
+    const coloresListas = {1: 'primary', 2: 'success', 3: 'info', 4: 'warning', 5: 'danger'};
+    const colorBadge = coloresListas[listaPrecioActiva];
+    
+    // Actualizar solo el badge de la lista
+    const badgeActual = infoCliente.querySelector('.badge');
+    if (badgeActual) {
+        badgeActual.className = 'badge bg-' + colorBadge + ' mt-1';
+        badgeActual.innerHTML = '📋 Lista ' + listaPrecioActiva + ' - ' + nombreLista;
+    }
+    
+    // Si hay productos, preguntar si recalcular
+    if (itemsVenta.length > 0) {
+        if (confirm('¿Recalcular precios de los ' + itemsVenta.length + ' productos con Lista ' + listaPrecioActiva + ' (' + nombreLista + ')?')) {
+            recalcularTodosLosPrecios();
+        }
+    }
+}
+
+function recalcularTodosLosPrecios() {
+    console.log('Recalculando con lista: ' + listaPrecioActiva);
+    
+    let productosActualizados = 0;
+    const totalProductos = itemsVenta.length;
+    
+    if (totalProductos === 0) return;
+    
+    const nombresListas = {1: 'Minorista', 2: 'Mayorista', 3: 'Distribuidor', 4: 'Especial', 5: 'Promocional'};
+    
+    itemsVenta.forEach(function(item) {
+        fetch('/api/producto_por_id/' + item.producto_id)
+            .then(function(response) { return response.json(); })
+            .then(function(producto) {
+                // Obtener precio según la lista activa
+                let precioBase;
+                switch(listaPrecioActiva) {
+                    case 2: precioBase = producto.precio2 || producto.precio; break;
+                    case 3: precioBase = producto.precio3 || producto.precio; break;
+                    case 4: precioBase = producto.precio4 || producto.precio; break;
+                    case 5: precioBase = producto.precio5 || producto.precio; break;
+                    default: precioBase = producto.precio;
+                }
+                
+                console.log('Producto ' + producto.codigo + ': Lista ' + listaPrecioActiva + ' = $' + precioBase);
+                
+                const ivaDecimal = producto.iva / 100;
+                const precioSinIva = precioBase / (1 + ivaDecimal);
+                
+                item.precio_unitario = precioSinIva;
+                item.subtotal = item.cantidad * item.precio_unitario;
+                item.lista_precio = listaPrecioActiva;
+                
+                productosActualizados++;
+                
+                if (productosActualizados === totalProductos) {
+                    actualizarTablaVenta();
+                    calcularTotales();
+                    console.log('Recalculación completada con lista ' + listaPrecioActiva + ' (' + nombresListas[listaPrecioActiva] + ')');
+                }
+            })
+            .catch(function(error) {
+                console.error('Error:', error);
+                productosActualizados++;
+            });
+    });
+}
+
+
+function guardarBorrador() {
+    if (itemsVenta.length === 0) {
+        mostrarError('No hay productos en la venta para guardar');
+        return;
+    }
+    
+    alert('Función guardarBorrador en desarrollo');
+}
+
+function imprimirFactura() {
+    if (!window.ultimaFacturaId) {
+        mostrarError('No hay factura para imprimir');
+        return;
+    }
+    
+    // Deshabilitar botón mientras imprime
+    const btnImprimir = event.target;
+    const textoOriginal = btnImprimir.innerHTML;
+    btnImprimir.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Imprimiendo...';
+    btnImprimir.disabled = true;
+    
+    fetch(`/imprimir_factura/${window.ultimaFacturaId}`, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            mostrarMensajeExito('✅ ' + data.mensaje);
+        } else {
+            mostrarError('❌ Error al imprimir: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        mostrarError('❌ Error de conexión al imprimir: ' + error.message);
+    })
+    .finally(() => {
+        // Restaurar botón
+        btnImprimir.innerHTML = textoOriginal;
+        btnImprimir.disabled = false;
+    });
+}
+
+// *** NUEVAS FUNCIONES DE IMPRESIÓN ***
+function testImpresion() {
+    const btn = event.target;
+    const textoOriginal = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+    btn.disabled = true;
+    
+    fetch('/test_impresion', {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            mostrarMensajeExito('✅ ' + data.mensaje);
+        } else {
+            mostrarError('❌ Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        mostrarError('❌ Error de conexión: ' + error.message);
+    })
+    .finally(() => {
+        btn.innerHTML = textoOriginal;
+        btn.disabled = false;
+    });
+}
+
+
+function verificarEstadoImpresora() {
+    fetch('/estado_impresora')
+    .then(response => response.json())
+    .then(data => {
+        let mensaje = '';
+        if (data.disponible) {
+            mensaje = `
+                <div class="alert alert-success">
+                    <i class="fas fa-printer"></i> <strong>Sistema de impresión disponible</strong><br>
+                    <small>
+                        Impresora: ${data.nombre || 'No detectada'}<br>
+                        Formato: ${data.ancho_mm}mm (${data.caracteres_linea} caracteres)<br>
+                        Estado: ${data.estado || 'Desconocido'}
+                    </small>
+                </div>
+            `;
+        } else {
+            mensaje = `
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i> <strong>Sistema de impresión no disponible</strong><br>
+                    <small>Error: ${data.error || 'Sistema no disponible'}</small><br>
+                    <small class="text-muted">Para Windows: pip install pywin32</small>
+                </div>
+            `;
+        }
+        
+        // Mostrar en modal
+        const modal = new bootstrap.Modal(document.getElementById('modalInfo'));
+        document.getElementById('mensaje_info').innerHTML = mensaje;
+        modal.show();
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        
+        const mensaje = `
+            <div class="alert alert-danger">
+                <i class="fas fa-times-circle"></i> <strong>Error de conexión</strong><br>
+                <small>No se pudo verificar el estado de la impresora</small><br>
+                <small class="text-muted">Error: ${error.message}</small>
+            </div>
+        `;
+        
+        const modal = new bootstrap.Modal(document.getElementById('modalInfo'));
+        document.getElementById('mensaje_info').innerHTML = mensaje;
+        modal.show();
+    });
+}
+
+function mostrarError(mensaje) {
+    const modal = new bootstrap.Modal(document.getElementById('modalError'));
+    const contenido = document.getElementById('mensaje_error');
+    contenido.innerHTML = `<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> ${mensaje}</div>`;
+    modal.show();
+}
+
+
+function mostrarQRFactura() {
+    if (!window.ultimaFacturaId) {
+        mostrarError('No hay factura para mostrar QR');
+        return;
+    }
+    
+    // Abrir QR en nueva ventana
+    window.open(`/mostrar_qr/${window.ultimaFacturaId}`, '_blank', 'width=600,height=800');
+}
+
+function validarQRFactura() {
+    if (!window.ultimaFacturaId) {
+        mostrarError('No hay factura para validar');
+        return;
+    }
+    
+    fetch(`/validar_qr/${window.ultimaFacturaId}`)
+    .then(response => response.json())
+    .then(data => {
+        let mensaje = '';
+        
+        if (data.qr_valido) {
+            mensaje = `
+                <div class="alert alert-success">
+                    <h5><i class="fas fa-check-circle"></i> QR ARCA Válido</h5>
+                    <p><strong>Factura:</strong> ${data.numero}</p>
+                    <p><strong>Estado:</strong> ${data.mensaje}</p>
+                    <small><strong>URL QR:</strong><br>
+                    <code style="font-size: 0.8em; word-break: break-all;">${data.qr_url}</code></small>
+                </div>
+            `;
+        } else {
+            mensaje = `
+                <div class="alert alert-warning">
+                    <h5><i class="fas fa-exclamation-triangle"></i> QR No Disponible</h5>
+                    <p><strong>Motivo:</strong> ${data.mensaje}</p>
+                    ${data.errores && data.errores.length > 0 ? 
+                        '<p><strong>Errores:</strong><br>' + data.errores.join('<br>') + '</p>' 
+                        : ''}
+                </div>
+            `;
+        }
+        
+        // Mostrar en modal
+        const modal = new bootstrap.Modal(document.getElementById('modalInfo'));
+        document.getElementById('mensaje_info').innerHTML = mensaje;
+        modal.show();
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        mostrarError('Error al validar QR: ' + error.message);
+    });
+}
+
+
+function validarQRFactura() {
+    if (!window.ultimaFacturaId) {
+        mostrarError('No hay factura para validar');
+        return;
+    }
+    
+    fetch(`/validar_qr/${window.ultimaFacturaId}`)
+    .then(response => response.json())
+    .then(data => {
+        let mensaje = '';
+        
+        if (data.qr_valido) {
+            mensaje = `
+                <div class="alert alert-success">
+                    <h5><i class="fas fa-check-circle"></i> QR AFIP Válido</h5>
+                    <p><strong>Factura:</strong> ${data.numero}</p>
+                    <p><strong>Estado:</strong> ${data.mensaje}</p>
+                    <small><strong>URL QR:</strong><br>
+                    <code style="font-size: 0.8em; word-break: break-all;">${data.qr_url}</code></small>
+                </div>
+            `;
+        } else {
+            mensaje = `
+                <div class="alert alert-warning">
+                    <h5><i class="fas fa-exclamation-triangle"></i> QR No Disponible</h5>
+                    <p><strong>Motivo:</strong> ${data.mensaje}</p>
+                    ${data.errores && data.errores.length > 0 ? 
+                        '<p><strong>Errores:</strong><br>' + data.errores.join('<br>') + '</p>' 
+                        : ''}
+                </div>
+            `;
+        }
+        
+        // Mostrar en modal
+        const modal = new bootstrap.Modal(document.getElementById('modalInfo'));
+        document.getElementById('mensaje_info').innerHTML = mensaje;
+        modal.show();
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        mostrarError('Error al validar QR: ' + error.message);
+    });
+}
+
+
+function abrirQREnAFIP() {
+    if (!window.ultimaFacturaId) {
+        mostrarError('No hay factura disponible');
+        return;
+    }
+    
+    // Primero obtener la URL del QR
+    fetch(`/validar_qr/${window.ultimaFacturaId}`)
+    .then(response => response.json())
+    .then(data => {
+        if (data.qr_valido && data.qr_url) {
+            // Abrir directamente en AFIP
+            window.open(data.qr_url, '_blank');
+        } else {
+            mostrarError('QR no disponible: ' + data.mensaje);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        mostrarError('Error al abrir QR: ' + error.message);
+    });
+}
+
+
+function nuevaVenta() {
+    // Cerrar el modal primero
+    const modal = bootstrap.Modal.getInstance(document.getElementById('modalConfirmacion'));
+    if (modal) {
+        modal.hide();
+    }
+    
+    // Limpiar venta sin confirmación (ya procesamos exitosamente)
+    limpiarVentaSinConfirmacion();
+}
+
+
+// Event listeners adicionales para medios de pago
+document.addEventListener('DOMContentLoaded', function() {
+    // Event listeners para medios de pago
+    const importeInput = document.getElementById('importe_pago');
+    if (importeInput) {
+        importeInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                agregarMedioPago();
+            }
+        });
+    }
+    
+    // Event listener para selector de medio
+    const medioSelect = document.getElementById('medio_pago_select');
+    if (medioSelect) {
+        medioSelect.addEventListener('change', function() {
+            if (this.value) {
+                document.getElementById('importe_pago').focus();
+            }
+        });
+    }
+    
+    // Actualizar tipo de comprobante inicial
+    actualizarTipoComprobante();
+});
+
+function procesarVentaConMediosPago() {
+    const clienteId = document.getElementById('cliente_select').value;
+    const tipoComprobante = document.getElementById('tipo_comprobante').value;
+    
+    const subtotal = itemsVenta.reduce((sum, item) => sum + item.subtotal, 0);
+    const iva = calcularIVAAFIP();
+    let totalOriginal = subtotal + iva;
+    
+    // APLICAR DESCUENTO AL TOTAL FINAL
+    let totalFinal = totalOriginal - montoDescuento;
+    
+    const imprimirAuto = document.getElementById('imprimir_automatico');
+    
+    // Items básicos para BD
+    const itemsParaBD = itemsVenta.map(item => ({
+        producto_id: item.producto_id,
+        cantidad: item.cantidad,
+        precio_unitario: item.precio_unitario,
+        subtotal: item.subtotal,
+        es_cta_cte: item.es_cta_cte || false  // FIX: Indicar si viene de CTA.CTE
+    }));
+    
+    // Items detallados CON IVA INDIVIDUAL
+    const itemsDetallados = itemsVenta.map(item => ({
+        producto_id: item.producto_id,
+        codigo: item.codigo,
+        nombre: item.nombre,
+        cantidad: item.cantidad,
+        precio_unitario: item.precio_unitario,
+        subtotal: item.subtotal,
+        iva_porcentaje: item.iva,
+        iva_importe: Math.round((item.subtotal * item.iva / 100) * 100) / 100
+    }));
+    
+    const ventaData = {
+        cliente_id: parseInt(clienteId),
+        tipo_comprobante: tipoComprobante,
+        items: itemsParaBD,
+        items_detalle: itemsDetallados,
+        subtotal: subtotal,
+        iva: iva,
+        descuento_porcentaje: descuentoPorcentaje,
+        descuento_monto: montoDescuento,
+        total: totalFinal,
+        medios_pago: mediosPagoIngresados.map(mp => ({
+            medio_pago: mp.medio,
+            importe: mp.importe
+        })),
+        imprimir_automatico: imprimirAuto ? imprimirAuto.checked : true,
+        productos_cta_cte_ids: productosSeleccionadosCTACTE 
+    };
+    
+    console.log('📤 DEBUG Enviando datos a servidor:');
+    console.log('Total original:', totalOriginal);
+    console.log('Descuento:', montoDescuento);
+    console.log('Total final enviado:', totalFinal);
+    console.log('Total medios:', mediosPagoIngresados.reduce((sum, mp) => sum + mp.importe, 0));
+    
+    // Deshabilitar botón y mostrar loading
+    const btnProcesar = document.getElementById('btn_procesar');
+    btnProcesar.disabled = true;
+    btnProcesar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando...';
+    
+    fetch('/procesar_venta', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(ventaData)
+    })
+    .then(response => response.json())
+    .then(result => {
+        btnProcesar.disabled = false;
+        btnProcesar.innerHTML = '<i class="fas fa-check-circle"></i> Procesar Venta';
+        
+        if (result.success) {
+            // ═══════════════════════════════════════════════════════════════
+            // VINCULAR PEDIDO A FACTURA SI VIENE DE PEDIDOS ONLINE
+            // ═══════════════════════════════════════════════════════════════
+            if (window.pedidoEnProceso && result.factura_id) {
+                fetch(`/api/admin/pedidos/${window.pedidoEnProceso}/vincular_factura`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ factura_id: result.factura_id })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log('✅ Pedido #' + window.pedidoEnProceso + ' vinculado a factura #' + result.factura_id);
+                    } else {
+                        console.error('❌ Error vinculando pedido:', data.error);
+                    }
+                    window.pedidoEnProceso = null;
+                })
+                .catch(error => {
+                    console.error('❌ Error en vinculación:', error);
+                    window.pedidoEnProceso = null;
+                });
+            }
+            // ═══════════════════════════════════════════════════════════════
+            
+            mostrarResultadoVenta(result);
+        } else {
+            mostrarError('Error al procesar la venta: ' + result.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        btnProcesar.disabled = false;
+        btnProcesar.innerHTML = '<i class="fas fa-check-circle"></i> Procesar Venta';
+        mostrarError('Error al procesar la venta');
+    });
+}
+
+function mostrarResultadoVenta(resultado) {
+    const modal = new bootstrap.Modal(document.getElementById('modalConfirmacion'));
+    const contenido = document.getElementById('resultado_venta');
+    
+    let estadoHtml = '';
+    
+    if (resultado.estado === 'autorizada') {
+        estadoHtml = `<div class="alert alert-success">
+            <i class="fas fa-check-circle"></i> <strong>¡Factura autorizada por ARCA!</strong>
+            <br><strong>CAE:</strong> ${resultado.cae}
+            <br><small class="text-success">✅ Código QR ARCA disponible</small>
+        </div>`;
+    } else if (resultado.estado === 'error_afip') {
+        estadoHtml = `<div class="alert alert-warning">
+            <i class="fas fa-exclamation-triangle"></i> <strong>Venta procesada localmente</strong>
+            <br>Error de conexión con ARCA - La factura se guardó localmente
+            <br><small class="text-warning">⚠️ QR ARCA no disponible</small>
+        </div>`;
+    } else {
+        estadoHtml = `<div class="alert alert-info">
+            <i class="fas fa-info-circle"></i> <strong>Venta procesada</strong>
+        </div>`;
+    }
+    
+    const subtotalFinal = itemsVenta.reduce((sum, item) => sum + item.subtotal, 0);
+    const ivaFinal = itemsVenta.reduce((sum, item) => sum + (item.subtotal * item.iva / 100), 0);
+    const totalFinal = subtotalFinal + ivaFinal;
+    
+    contenido.innerHTML = `
+        ${estadoHtml}
+        <div class="row">
+            <div class="col-md-6">
+                <p><strong>Número de Factura:</strong><br><code>${resultado.numero}</code></p>
+                <p><strong>Cliente:</strong><br>${document.getElementById('cliente_select').selectedOptions[0].text}</p>
+            </div>
+            <div class="col-md-6">
+                <p><strong>Subtotal:</strong> $${subtotalFinal.toFixed(2)}</p>
+                <p><strong>IVA:</strong> $${ivaFinal.toFixed(2)}</p>
+                <p><strong>Total:</strong> <span class="h5 text-success">$${totalFinal.toFixed(2)}</span></p>
+            </div>
+        </div>
+    `;
+    
+    // Guardar ID de factura para imprimir y QR
+    window.ultimaFacturaId = resultado.factura_id;
+    
+    modal.show();
+}
+
+
+function mostrarError(mensaje) {
+    console.error('❌ Error:', mensaje);
+    alert('❌ Error: ' + mensaje);
+}
+
+function mostrarMensajeExito(mensaje) {
+    console.log('✅ Éxito:', mensaje);
+}
+
+
+// Nueva función para limpiar sin confirmación
+function limpiarVentaSinConfirmacion() {
+    // Limpiar todo
+    itemsVenta = [];
+    contadorItems = 0;
+    productoSeleccionado = null;
+    mediosPagoIngresados = [];
+    
+    // AGREGAR: Reset de descuentos
+    descuentoPorcentaje = 0;
+    montoDescuento = 0;
+    
+    actualizarTablaVenta();
+    calcularTotales();
+    
+    // Limpiar campos de descuento
+    const descuentoInput = document.getElementById('descuento_porcentaje');
+    const infoDescuento = document.getElementById('info_descuento_simple');
+    if (descuentoInput) {
+        descuentoInput.value = '';
+    }
+    if (infoDescuento) {
+        infoDescuento.style.display = 'none';
+    }
+    
+    // Reset formulario
+    document.getElementById('cliente_select').value = '1';
+    document.getElementById('tipo_comprobante').value = '11';
+    document.getElementById('buscar_producto').value = '';
+    ocultarSugerencias();
+    actualizarTipoComprobante();
+    document.getElementById('buscar_producto').focus();
+}
+
+
+function resetearDescuentos() {
+    descuentoPorcentaje = 0;
+    montoDescuento = 0;
+    
+    // Limpiar campos del formulario
+    const descuentoInput = document.getElementById('descuento_porcentaje');
+    const infoDescuento = document.getElementById('info_descuento_simple');
+    
+    if (descuentoInput) {
+        descuentoInput.value = '';
+    }
+    
+    if (infoDescuento) {
+        infoDescuento.style.display = 'none';
+    }
+}
+
+
+function limpiarVenta() {
+    if (itemsVenta.length > 0) {
+        if (!confirm('¿Está seguro de limpiar toda la venta?')) {
+            return;
+        }
+    }
+    
+    // Limpiar todo
+    itemsVenta = [];
+    contadorItems = 0;
+    productoSeleccionado = null;
+    mediosPagoIngresados = [];
+
+    productosSeleccionadosCTACTE = [];
+    productosPendientesCTACTE = [];
+    
+    // Rehabilitar opción CTA.CTE
+    const selectMedioPago = document.getElementById('medio_pago_select');
+    if (selectMedioPago) {
+        const opcionCTACTE = selectMedioPago.querySelector('option[value="CTA.CTE"]');
+        if (opcionCTACTE) {
+            opcionCTACTE.disabled = false;
+            opcionCTACTE.text = '📋 Cuenta Corriente (Venta Fiada)';
+        }
+    }
+
+    // Rehabilitar botón rápido CTA.CTE
+    const botonesRapidos = document.querySelectorAll('button[onclick*="completarConCTACTE"]');
+    botonesRapidos.forEach(btn => {
+        btn.disabled = false;
+        btn.classList.remove('disabled');
+        btn.title = '';
+    });
+
+
+    // AGREGAR: Reset de descuentos
+    descuentoPorcentaje = 0;
+    montoDescuento = 0;
+    
+    actualizarTablaVenta();
+    calcularTotales();
+    
+    // Limpiar campos de descuento
+    const descuentoInput = document.getElementById('descuento_porcentaje');
+    const infoDescuento = document.getElementById('info_descuento_simple');
+    if (descuentoInput) {
+        descuentoInput.value = '';
+    }
+    if (infoDescuento) {
+        infoDescuento.style.display = 'none';
+    }
+    
+    // Reset formulario
+    document.getElementById('cliente_select').value = '1';
+    document.getElementById('tipo_comprobante').value = '11';
+    document.getElementById('buscar_producto').value = '';
+    ocultarSugerencias();
+    actualizarTipoComprobante();
+    // Reset tipo de precio
+    tipoPrecioActivo = 'venta';
+    document.getElementById('buscar_producto').focus();
+}
+
+
+// Event listeners y inicialización
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 DOM cargado, inicializando nueva_venta...');
+    
+    const inputBuscar = document.getElementById('buscar_producto');
+    
+    // Búsqueda en tiempo real
+    inputBuscar.addEventListener('input', function() {
+        clearTimeout(timeoutBusqueda);
+        const termino = this.value.trim();
+        
+        if (termino.length < 2) {
+            ocultarSugerencias();
+            productoSeleccionado = null;
+            return;
+        }
+        
+        timeoutBusqueda = setTimeout(() => {
+            buscarProductos(termino);
+        }, 300);
+    });
+    
+    // Navegación con teclado
+    inputBuscar.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            agregarProducto();
+        } else if (e.key === 'Escape') {
+            ocultarSugerencias();
+            productoSeleccionado = null;
+        }
+    });
+    
+
+    // Ocultar sugerencias al hacer clic fuera
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('#buscar_producto') && !e.target.closest('#sugerencias')) {
+            ocultarSugerencias();
+        }
+    });
+    
+    // Eventos para cantidad
+    //const inputCantidad = document.getElementById('cantidad');
+    const inputCantidad = 1.00;
+    
+    // Inicializar
+    actualizarTablaVenta();
+    calcularTotales();
+    
+    // Focus inicial
+    document.getElementById('buscar_producto').focus();
+    
+    console.log('✅ Sistema POS cargado correctamente');
+
+    // Cargar ofertas al iniciar
+    inicializarCacheOfertas();
+    
+    console.log('✅ Sistema de ofertas por volumen inicializado');
+
+     verificarPedidoPendiente();
+});
+
+///////////////////// FUNCIONES DE DESCUENTO //////////////////////////////
+// Variables para descuento simple
+let descuentoPorcentaje = 0;
+let montoDescuento = 0;
+
+function aplicarDescuentoPorcentaje() {
+    const porcentaje = parseFloat(document.getElementById('descuento_porcentaje').value) || 0;
+    
+    if (porcentaje < 0 || porcentaje > 100) {
+        document.getElementById('descuento_porcentaje').value = 0;
+        porcentaje = 0;
+    }
+    
+    descuentoPorcentaje = porcentaje;
+    montoDescuento = (totalVenta * porcentaje) / 100;
+    
+    // Mostrar ahorro
+    if (porcentaje > 0) {
+        document.getElementById('ahorro_descuento').textContent = montoDescuento.toFixed(2);
+        document.getElementById('info_descuento_simple').style.display = 'block';
+    } else {
+        document.getElementById('info_descuento_simple').style.display = 'none';
+        montoDescuento = 0;
+    }
+    
+    // Actualizar total a pagar
+    const totalConDescuento = totalVenta - montoDescuento;
+    document.getElementById('total_a_pagar').textContent = formatearMoneda(totalConDescuento);
+    
+    // Recalcular estado de pago
+    actualizarResumenPago();
+}
+
+
+// * Muestra el modal de ayuda de CTA.CTE cargando el contenido dinámicamente
+function mostrarAyudaCtaCte() {
+    const $modal = $('#modalAyudaCtaCte');
+    
+    // Mostrar el modal con el spinner de carga
+    $modal.modal('show');
+    
+    // Cargar el contenido de ayuda
+    fetch('/ayuda_ctacte')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Error al cargar la ayuda');
+            }
+            return response.text();
+        })
+        .then(html => {
+            // Extraer solo el contenido del body (sin el HTML completo)
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const contenido = doc.querySelector('.container') || doc.body;
+            
+            // Insertar el contenido en el modal
+            document.getElementById('contenidoAyudaCtaCte').innerHTML = contenido.innerHTML;
+            
+            // Reinicializar los botones de cerrar
+            $modal.find('[data-dismiss="modal"]').off('click').on('click', function() {
+                $modal.modal('hide');
+            });
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('contenidoAyudaCtaCte').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Error:</strong> No se pudo cargar la ayuda. Por favor, intentá nuevamente.
+                </div>
+            `;
+        });
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FUNCIONES DE CUENTA CORRIENTE (CTA.CTE)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// FUNCIÓN: Cargar productos pendientes de un cliente
+async function cargarProductosPendientesCTACTE() {
+    const clienteSelect = document.getElementById('cliente_select');
+    const clienteId = clienteSelect.value;
+    
+    if (!clienteId || clienteId === '1') {
+      Swal.fire({
+            icon: 'warning',
+            title: 'Cliente requerido',
+            text: 'Debe seleccionar un cliente (no puede ser Consumidor Final)',
+            confirmButtonColor: '#ffc107'
+        });
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/cta_cte/productos_pendientes/${clienteId}`);
+        const data = await response.json();
+        
+        if (data.success && data.productos.length > 0) {
+            productosPendientesCTACTE = data.productos;
+            mostrarModalProductosPendientes(data.productos, data.saldo_total);
+        } else {
+            Swal.fire({
+                icon: 'info',
+                title: 'Sin productos pendientes',
+                text: 'Este cliente no tiene productos pendientes en cuenta corriente',
+                confirmButtonColor: '#17a2b8'
+            });
+        }
+    } catch (error) {
+        console.error('Error al cargar productos pendientes:', error);
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Error al cargar productos pendientes',
+            confirmButtonColor: '#dc3545'
+        });
+    }
+}
+
+// FUNCIÓN: Mostrar modal con productos pendientes
+function mostrarModalProductosPendientes(movimientos, saldoTotal) {
+    const modal = `
+        <div class="modal fade" id="modalProductosPendientes" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header bg-warning text-dark">
+                        <h5 class="modal-title">
+                            <i class="fas fa-clock"></i> 
+                            Productos Pendientes en Cuenta Corriente
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-info">
+                            <strong>Saldo Total Pendiente:</strong> $${saldoTotal.toFixed(2)}
+                        </div>
+                        
+                        <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                            ${movimientos.map(mov => `
+                                <div class="card mb-3">
+                                    <div class="card-header bg-light">
+                                        <strong>Fecha:</strong> ${mov.fecha} | 
+                                        <strong>Total:</strong> $${mov.monto_total.toFixed(2)}
+                                        <button class="btn btn-sm btn-primary float-end" 
+                                                onclick="seleccionarMovimientoCompleto(${mov.movimiento_id})">
+                                            Seleccionar Todo
+                                        </button>
+                                    </div>
+                                    <div class="card-body p-0">
+                                        <table class="table table-sm mb-0">
+                                            <thead>
+                                                <tr>
+                                                    <th width="50">
+                                                        <input type="checkbox" 
+                                                               id="check_mov_${mov.movimiento_id}"
+                                                               onchange="seleccionarTodosProductosMovimiento(${mov.movimiento_id}, this.checked)">
+                                                    </th>
+                                                    <th>Producto</th>
+                                                    <th>Cant.</th>
+                                                    <th>Precio Actual</th>
+                                                    <th>Subtotal Actual</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                ${mov.productos.map(prod => `
+                                                    <tr>
+                                                        <td>
+                                                            <input type="checkbox" 
+                                                                   class="check-producto check-mov-${mov.movimiento_id}" 
+                                                                   data-detalle-id="${prod.detalle_id}"
+                                                                   data-producto-id="${prod.producto_id}"
+                                                                   data-cantidad="${prod.cantidad}"
+                                                                   data-precio="${prod.precio_actual}"
+                                                                   data-subtotal="${prod.subtotal_actual}"
+                                                                   data-iva="${prod.porcentaje_iva}"
+                                                                   data-descripcion="${prod.descripcion}">
+                                                        </td>
+                                                        <td>${prod.descripcion}</td>
+                                                        <td>${prod.cantidad}</td>
+                                                        <td>$${prod.precio_actual.toFixed(2)}${prod.precio_actual !== prod.precio_unitario ? ' <small class="text-warning">(antes: $' + prod.precio_unitario.toFixed(2) + ')</small>' : ''}</td>
+                                                        <td>$${prod.subtotal_actual.toFixed(2)}${prod.subtotal_actual !== prod.subtotal ? ' <small class="text-warning">(antes: $' + prod.subtotal.toFixed(2) + ')</small>' : ''}</td>
+                                                    </tr>
+                                                `).join('')}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            Cancelar
+                        </button>
+                        <button type="button" class="btn btn-success" onclick="agregarProductosSeleccionados()">
+                            <i class="fas fa-cart-plus"></i> Agregar al Carrito
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Eliminar modal anterior si existe
+    const modalAnterior = document.getElementById('modalProductosPendientes');
+    if (modalAnterior) {
+        modalAnterior.remove();
+    }
+    
+    // Agregar nuevo modal
+    document.body.insertAdjacentHTML('beforeend', modal);
+    
+    // Mostrar modal
+    const modalElement = new bootstrap.Modal(document.getElementById('modalProductosPendientes'));
+    modalElement.show();
+}
+
+// FUNCIÓN: Seleccionar movimiento completo
+function seleccionarMovimientoCompleto(movimientoId) {
+    const checkboxes = document.querySelectorAll(`.check-mov-${movimientoId}`);
+    checkboxes.forEach(cb => cb.checked = true);
+    document.getElementById(`check_mov_${movimientoId}`).checked = true;
+}
+
+function seleccionarTodosProductosMovimiento(movimientoId, checked) {
+    const checkboxes = document.querySelectorAll(`.check-mov-${movimientoId}`);
+    checkboxes.forEach(cb => cb.checked = checked);
+}
+
+// FUNCIÓN: Agregar productos seleccionados al carrito
+function agregarProductosSeleccionados() {
+    const checkboxes = document.querySelectorAll('.check-producto:checked');
+    
+    if (checkboxes.length === 0) {
+       Swal.fire({
+            icon: 'warning',
+            title: 'Selección requerida',
+            text: 'Debe seleccionar al menos un producto',
+            confirmButtonColor: '#ffc107'
+        });
+        return;
+    }
+    
+    // Limpiar carrito actual
+    itemsVenta = [];
+    productosSeleccionadosCTACTE = [];
+    
+    // Agregar productos seleccionados
+    checkboxes.forEach(cb => {
+        const detalleId = parseInt(cb.dataset.detalleId);
+        const productoId = parseInt(cb.dataset.productoId);
+        const cantidad = parseFloat(cb.dataset.cantidad);
+        const precio = parseFloat(cb.dataset.precio);
+        const subtotal = parseFloat(cb.dataset.subtotal);
+        const iva = parseFloat(cb.dataset.iva);
+        const descripcion = cb.dataset.descripcion;
+        
+        // Agregar al carrito
+        // El precio viene CON IVA, hay que convertirlo a SIN IVA
+        // porque el sistema le agrega el IVA al calcular totales
+        const ivaDecimal = iva / 100;
+        const precioSinIva = precio / (1 + ivaDecimal);
+        const subtotalSinIva = subtotal / (1 + ivaDecimal);
+
+        // Agregar al carrito
+        const item = {
+            id: contadorItems++,
+            producto_id: productoId,
+            codigo: '',
+            nombre: descripcion,
+            cantidad: cantidad,
+            precio_unitario: precioSinIva,
+            subtotal: subtotalSinIva,
+            iva: iva,
+            es_cta_cte: true
+        };
+        
+        itemsVenta.push(item);
+        
+        // Guardar ID de detalle para marcarlo como pagado después
+        productosSeleccionadosCTACTE.push(detalleId);
+    });
+    
+    // Actualizar vista del carrito
+    actualizarTablaVenta();
+    calcularTotales();
+    
+    // Cerrar modal
+    const modalElement = bootstrap.Modal.getInstance(document.getElementById('modalProductosPendientes'));
+    modalElement.hide();
+    
+    // Mostrar mensaje
+    Swal.fire({
+        icon: 'success',
+        title: '¡Productos agregados!',
+        text: `Se agregaron ${checkboxes.length} productos al carrito para facturar`,
+        timer: 2000,
+        showConfirmButton: false
+    });
+
+    // Deshabilitar opción CTA.CTE en el select de medios de pago
+    const selectMedioPago = document.getElementById('medio_pago_select');
+    if (selectMedioPago) {
+        const opcionCTACTE = selectMedioPago.querySelector('option[value="CTA.CTE"]');
+        if (opcionCTACTE) {
+            opcionCTACTE.disabled = true;
+            opcionCTACTE.text = '📋 Cuenta Corriente (NO disponible - tiene productos fiados)';
+        }
+    }
+
+    // Deshabilitar botón rápido CTA.CTE
+    const botonesRapidos = document.querySelectorAll('button[onclick*="completarConCTACTE"]');
+    botonesRapidos.forEach(btn => {
+        btn.disabled = true;
+        btn.classList.add('disabled');
+        btn.title = 'No puede pagar productos fiados con CTA.CTE';
+    });
+    
+}
+
+// FUNCIÓN: Completar con CTA.CTE
+function completarConCTACTE() {
+    // Validar cliente primero
+    const clienteSelect = document.getElementById('cliente_select');
+    const clienteId = clienteSelect.value;
+    const tipoComprobante = document.getElementById('tipo_comprobante').value;
+    const opcionCliente = clienteSelect.selectedOptions[0];
+    const documentoCliente = opcionCliente.getAttribute('data-documento');
+    
+    // No permitir Consumidor Final
+    if (!clienteId || clienteId === '1') {
+       Swal.fire({
+            icon: 'error',
+            title: 'Cliente inválido',
+            html: '<b>No puede usar CTA.CTE con Consumidor Final</b><br><br>Debe seleccionar un cliente específico.',
+            confirmButtonColor: '#dc3545'
+        });
+        return;
+    }
+    
+    // Validar CUIT para Factura A
+    if (tipoComprobante === '01') {
+        if (!documentoCliente || documentoCliente.length !== 11) {
+           Swal.fire({
+                icon: 'error',
+                title: 'CUIT requerido',
+                html: '<b>Para CTA.CTE con Factura A, el cliente DEBE tener CUIT válido (11 dígitos)</b><br><br>' +
+                    'Este cliente no cumple el requisito.<br><br>' +
+                    '<b>Opciones:</b><br>' +
+                    '1. Seleccionar cliente con CUIT<br>' +
+                    '2. Cambiar a Factura B o C',
+                confirmButtonColor: '#dc3545',
+                width: '600px'
+            });
+            return;
+        }
+    }
+    
+    // Validar documento para Factura B
+    if (tipoComprobante === '06') {
+        if (!documentoCliente || documentoCliente.length < 7) {
+           Swal.fire({
+                icon: 'error',
+                title: 'Documento requerido',
+                html: '<b>Para CTA.CTE con Factura B, el cliente debe tener documento válido</b><br><br>' +
+                    '<b>Opciones:</b><br>' +
+                    '1. Editar cliente y agregar documento<br>',
+                confirmButtonColor: '#dc3545',
+                width: '600px'
+            });
+            return;
+        }
+    }
+    
+    // Si pasa las validaciones, completar
+    const totalAPagar = totalVenta - montoDescuento;
+    document.getElementById('medio_pago_select').value = 'CTA.CTE';
+    document.getElementById('importe_pago').value = totalAPagar.toFixed(2);
+    agregarMedioPago();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CARGAR PEDIDO DESDE ADMIN (si viene de /admin/pedidos)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function verificarPedidoPendiente() {
+    const pedidoData = sessionStorage.getItem('pedido_para_facturar');
+    
+    if (!pedidoData) return;
+    
+    try {
+        const pedido = JSON.parse(pedidoData);
+        console.log('📦 Cargando pedido #' + pedido.pedido_id);
+        
+        // Limpiar sessionStorage
+        sessionStorage.removeItem('pedido_para_facturar');
+        
+        // 1. Seleccionar cliente (NOTA: tu select se llama cliente_select, no clienteSelect)
+        const selectCliente = document.getElementById('cliente_select');
+        if (selectCliente) {
+            selectCliente.value = pedido.cliente_id;
+            // Disparar evento change para cargar lista de precios
+            selectCliente.dispatchEvent(new Event('change'));
+        }
+        
+        // 2. Limpiar carrito actual
+        itemsVenta = [];
+        contadorItems = 0;
+        
+        // 3. Esperar un momento para que se cargue el cliente y la lista
+        setTimeout(() => {
+            // 4. Agregar productos del pedido al carrito
+            pedido.productos.forEach(prod => {
+                // El precio viene SIN IVA desde el pedido
+                const item = {
+                    id: contadorItems++,
+                    producto_id: prod.producto_id,
+                    codigo: prod.codigo,
+                    nombre: prod.nombre,
+                    cantidad: prod.cantidad,
+                    precio_unitario: prod.precio_unitario,
+                    precio_base: prod.precio_unitario,
+                    subtotal: prod.cantidad * prod.precio_unitario,
+                    iva: prod.iva || 21,
+                    stock: prod.stock || 999,
+                    es_combo: prod.es_combo || false,
+                    lista_precio: pedido.lista_precio
+                };
+                
+                itemsVenta.push(item);
+            });
+            
+            // 5. Actualizar vista
+            actualizarTablaVenta();
+            calcularTotales();
+            
+            // 6. Mostrar mensaje
+            Swal.fire({
+                icon: 'success',
+                title: 'Pedido cargado',
+                text: `Pedido #${pedido.pedido_id} cargado correctamente con ${pedido.productos.length} productos`,
+                timer: 3000,
+                showConfirmButton: false
+            });
+            
+            // 7. Guardar pedido_id para vincular después de facturar
+            window.pedidoEnProceso = pedido.pedido_id;
+            
+        }, 500);
+        
+    } catch (error) {
+        console.error('Error cargando pedido:', error);
+    }
+}
+
+</script>
+{% endblock %}
+
+<style>
+/* Estilos para la búsqueda mejorada */
+.cursor-pointer {
+    cursor: pointer;
+}
+
+.sugerencia-item:hover {
+    background-color: #f8f9fa !important;
+}
+
+#sugerencias {
+    border: 1px solid #dee2e6;
+    border-top: none;
+    border-radius: 0 0 0.375rem 0.375rem;
+}
+
+.sugerencia-item:last-child {
+    border-bottom: none !important;
+}
+
+.sugerencia-item {
+    transition: background-color 0.2s ease;
+}
+
+/* Estilos para mejor UX */
+.table th {
+    background-color: #343a40 !important;
+    color: white;
+    border-color: #454d55 !important;
+}
+
+.btn-group .btn {
+    border-radius: 0;
+}
+
+.btn-group .btn:first-child {
+    border-radius: 0.375rem 0 0 0.375rem;
+}
+
+.btn-group .btn:last-child {
+    border-radius: 0 0.375rem 0.375rem 0;
+}
+
+/* Animaciones suaves */
+.alert {
+    animation: slideInRight 0.3s ease;
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Estilos para impresión */
+.form-check-input:checked {
+    background-color: #28a745;
+    border-color: #28a745;
+}
+
+.fa-spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Estilos para el modal de medios de pago */
+#modalMediosPago .table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+}
+
+#modalMediosPago .btn-group-sm .btn {
+    font-size: 0.775em;
+}
+
+.diferencia-positiva {
+    color: #28a745 !important;
+}
+
+.diferencia-negativa {
+    color: #dc3545 !important;
+}
+
+.diferencia-cero {
+    color: #28a745 !important;
+    font-weight: bold;
+}
+
+#modalMediosPago .alert {
+    border-radius: 0.5rem;
+}
+
+#modalMediosPago .card {
+    border-radius: 0.5rem;
+}
+
+/* Animación para agregar medios */
+.medio-pago-nuevo {
+    animation: slideInLeft 0.3s ease;
+}
+
+@keyframes slideInLeft {
+    from {
+        transform: translateX(-100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Responsive improvements */
+@media (max-width: 768px) {
+    .btn-group {
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .btn-group .btn {
+        border-radius: 0.375rem !important;
+        margin-bottom: 0.25rem;
+    }
+    
+    #sugerencias {
+        max-height: 200px;
+    }
+}
+
+/* Destacar productos de CTA.CTE en el carrito */
+tr.producto-ctacte {
+    background-color: #fff3cd !important;
+}
+
+tr.producto-ctacte td {
+    border-left: 3px solid #ffc107;
+}
+
+/* Badge de CTA.CTE */
+.badge-ctacte {
+    background-color: #ffc107;
+    color: #000;
+    font-weight: bold;
+    font-size: 0.7em;
+    padding: 0.25em 0.5em;
+    border-radius: 0.25rem;
+    margin-left: 0.5rem;
+}
+
+/* Checkbox de productos pendientes */
+.check-producto {
+    width: 1.2em;
+    height: 1.2em;
+    cursor: pointer;
+}
+
+.check-producto:checked {
+    background-color: #ffc107;
+    border-color: #ffc107;
+}
+
+</style>

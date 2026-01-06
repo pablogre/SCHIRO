@@ -1,0 +1,501 @@
+<!-- templates/cuentas_corrientes.html -->
+{% extends "base.html" %}
+
+{% block title %}Cuentas Corrientes - FactuFacil{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">
+            <i class="fas fa-clipboard-list"></i> Cuentas Corrientes
+        </h1>
+        <div class="btn-toolbar mb-2 mb-md-0">
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="exportarPDF()">
+                <i class="fas fa-file-pdf"></i> Exportar PDF
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary ms-2" onclick="exportarExcel()">
+                <i class="fas fa-file-excel"></i> Exportar Excel
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-primary ms-2" onclick="imprimirReporte()">
+                <i class="fas fa-print"></i> Imprimir
+            </button>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-3">
+        <div class="card-header bg-primary text-white">
+            <i class="fas fa-filter"></i> Filtros
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <label class="form-label">Estado</label>
+                    <select class="form-select" id="filtro_estado" onchange="filtrarDatos()">
+                        <option value="">Todos</option>
+                        <option value="pendiente" selected>Pendientes</option>
+                        <option value="pagado">Pagados</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Buscar Cliente</label>
+                    <input type="text" class="form-control" id="filtro_cliente" 
+                           placeholder="Nombre o documento..." onkeyup="filtrarDatos()">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Ordenar por</label>
+                    <select class="form-select" id="filtro_orden" onchange="filtrarDatos()">
+                        <option value="saldo_desc">Mayor deuda</option>
+                        <option value="saldo_asc">Menor deuda</option>
+                        <option value="nombre_asc">Nombre A-Z</option>
+                        <option value="fecha_desc">Más reciente</option>
+                        <option value="fecha_asc">Más antiguo</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Resumen General -->
+    <div class="row mb-3">
+        <div class="col-md-3">
+            <div class="card text-white bg-danger">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="fas fa-exclamation-circle"></i> Total Adeudado
+                    </h5>
+                    <h2 id="total_adeudado">$0.00</h2>
+                    <small id="cantidad_clientes_deudores">0 clientes</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-success">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="fas fa-check-circle"></i> Total Cobrado
+                    </h5>
+                    <h2 id="total_cobrado">$0.00</h2>
+                    <small id="cantidad_cobros">0 pagos</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-warning">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="fas fa-clock"></i> Movimientos
+                    </h5>
+                    <h2 id="total_movimientos">0</h2>
+                    <small>Total de operaciones</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-info">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="fas fa-users"></i> Clientes
+                    </h5>
+                    <h2 id="total_clientes_activos">0</h2>
+                    <small>Con movimientos</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla de Clientes con Deuda -->
+    <div class="card">
+        <div class="card-header bg-warning text-dark">
+            <h5 class="mb-0">
+                <i class="fas fa-users"></i> Detalle por Cliente
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover" id="tabla_cuentas">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Cliente</th>
+                            <th>Documento</th>
+                            <th class="text-center">Movimientos Pendientes</th>
+                            <th class="text-end">Saldo Pendiente</th>
+                            <th class="text-center">Última Operación</th>
+                            <th class="text-center">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody_cuentas">
+                        <!-- Se llena dinámicamente -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <div id="mensaje_sin_datos" class="text-center text-muted py-5" style="display: none;">
+                <i class="fas fa-inbox fa-3x mb-3"></i>
+                <h5>No hay movimientos para mostrar</h5>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Detalle Cliente -->
+<div class="modal fade" id="modalDetalleCliente" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-user"></i> Detalle de Cuenta Corriente
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Info Cliente -->
+                <div class="alert alert-info mb-3">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <strong>Cliente:</strong> <span id="modal_cliente_nombre"></span><br>
+                            <strong>Documento:</strong> <span id="modal_cliente_documento"></span>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <strong>Saldo Pendiente:</strong><br>
+                            <span class="h3 text-danger" id="modal_saldo_pendiente">$0.00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Movimientos del Cliente -->
+                <h6><i class="fas fa-list"></i> Historial de Movimientos</h6>
+                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                    <table class="table table-sm">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Tipo</th>
+                                <th>Estado</th>
+                                <th class="text-end">Monto</th>
+                                <th>Factura</th>
+                                <th>Productos</th>
+                                <th class="text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modal_tbody_movimientos">
+                            <!-- Se llena dinámicamente -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-success" onclick="cobrarCtaCte()">
+                    <i class="fas fa-cash-register"></i> Cobrar Cuenta
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Detalle Productos -->
+<div class="modal fade" id="modalProductosMovimiento" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-shopping-cart"></i> Productos del Movimiento
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Producto</th>
+                            <th>Cantidad</th>
+                            <th>Precio Unit.</th>
+                            <th class="text-end">Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modal_tbody_productos">
+                        <!-- Se llena dinámicamente -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let datosCompletos = [];
+let clienteSeleccionado = null;
+
+// Cargar datos al iniciar
+document.addEventListener('DOMContentLoaded', function() {
+    cargarDatos();
+});
+
+async function cargarDatos() {
+    try {
+        const response = await fetch('/api/cta_cte/resumen_general');
+        const data = await response.json();
+        
+        if (data.success) {
+            datosCompletos = data.clientes;
+            actualizarResumen(data.resumen);
+            filtrarDatos();
+        } else {
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'Error al cargar datos de cuentas corrientes'
+            });
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Error de conexión'
+        });
+    }
+}
+
+function actualizarResumen(resumen) {
+    document.getElementById('total_adeudado').textContent = '$' + resumen.total_pendiente.toFixed(2);
+    document.getElementById('cantidad_clientes_deudores').textContent = resumen.clientes_con_deuda + ' clientes';
+    
+    document.getElementById('total_cobrado').textContent = '$' + resumen.total_cobrado.toFixed(2);
+    document.getElementById('cantidad_cobros').textContent = resumen.cantidad_pagos + ' pagos';
+    
+    document.getElementById('total_movimientos').textContent = resumen.total_movimientos;
+    document.getElementById('total_clientes_activos').textContent = resumen.clientes_activos;
+}
+
+function filtrarDatos() {
+    const estadoFiltro = document.getElementById('filtro_estado').value;
+    const clienteFiltro = document.getElementById('filtro_cliente').value.toLowerCase();
+    const orden = document.getElementById('filtro_orden').value;
+    
+    // Filtrar
+    let datosFiltrados = datosCompletos.filter(cliente => {
+        let pasaEstado = true;
+        if (estadoFiltro === 'pendiente') {
+            pasaEstado = cliente.saldo_pendiente > 0;
+        } else if (estadoFiltro === 'pagado') {
+            pasaEstado = cliente.saldo_pendiente === 0;
+        }
+        
+        let pasaCliente = true;
+        if (clienteFiltro) {
+            pasaCliente = cliente.nombre.toLowerCase().includes(clienteFiltro) ||
+                         (cliente.documento && cliente.documento.includes(clienteFiltro));
+        }
+        
+        return pasaEstado && pasaCliente;
+    });
+    
+    // Ordenar
+    datosFiltrados.sort((a, b) => {
+        switch(orden) {
+            case 'saldo_desc': return b.saldo_pendiente - a.saldo_pendiente;
+            case 'saldo_asc': return a.saldo_pendiente - b.saldo_pendiente;
+            case 'nombre_asc': return a.nombre.localeCompare(b.nombre);
+            case 'fecha_desc': return new Date(b.ultima_operacion) - new Date(a.ultima_operacion);
+            case 'fecha_asc': return new Date(a.ultima_operacion) - new Date(b.ultima_operacion);
+            default: return 0;
+        }
+    });
+    
+    renderizarTabla(datosFiltrados);
+}
+
+function renderizarTabla(datos) {
+    const tbody = document.getElementById('tbody_cuentas');
+    const mensajeSinDatos = document.getElementById('mensaje_sin_datos');
+    
+    if (datos.length === 0) {
+        tbody.innerHTML = '';
+        mensajeSinDatos.style.display = 'block';
+        return;
+    }
+    
+    mensajeSinDatos.style.display = 'none';
+    
+    tbody.innerHTML = datos.map(cliente => `
+        <tr class="${cliente.saldo_pendiente > 0 ? 'table-warning' : ''}">
+            <td>
+                <strong>${cliente.nombre}</strong>
+                ${cliente.saldo_pendiente > 0 ? '<span class="badge bg-danger ms-2">Debe</span>' : ''}
+            </td>
+            <td>${cliente.documento || 'Sin documento'}</td>
+            <td class="text-center">
+                <span class="badge bg-primary">${cliente.movimientos_pendientes}</span>
+            </td>
+            <td class="text-end">
+                <strong class="${cliente.saldo_pendiente > 0 ? 'text-danger' : 'text-success'}">
+                    $${cliente.saldo_pendiente.toFixed(2)}
+                </strong>
+            </td>
+            <td class="text-center">
+                <small>${cliente.ultima_operacion || 'Sin operaciones'}</small>
+            </td>
+            <td class="text-center">
+                <button class="btn btn-sm btn-primary" onclick="verDetalleCliente(${cliente.id})">
+                    <i class="fas fa-eye"></i> Ver Detalle
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function verDetalleCliente(clienteId) {
+    try {
+        const response = await fetch(`/api/cta_cte/detalle_cliente/${clienteId}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            clienteSeleccionado = data.cliente;
+            mostrarModalDetalle(data);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Error al cargar detalle del cliente'
+        });
+    }
+}
+
+function mostrarModalDetalle(data) {
+    document.getElementById('modal_cliente_nombre').textContent = data.cliente.nombre;
+    document.getElementById('modal_cliente_documento').textContent = data.cliente.documento || 'Sin documento';
+    document.getElementById('modal_saldo_pendiente').textContent = '$' + data.cliente.saldo_pendiente.toFixed(2);
+    
+    const tbody = document.getElementById('modal_tbody_movimientos');
+    tbody.innerHTML = data.movimientos.map(mov => `
+        <tr>
+            <td><small>${mov.fecha}</small></td>
+            <td>
+                <span class="badge ${mov.tipo === 'venta_fiada' ? 'bg-warning' : 'bg-success'}">
+                    ${mov.tipo === 'venta_fiada' ? 'Venta Fiada' : 'Pago'}
+                </span>
+            </td>
+            <td>
+                <span class="badge ${mov.estado === 'pendiente' ? 'bg-danger' : 'bg-success'}">
+                    ${mov.estado === 'pendiente' ? 'Pendiente' : 'Pagado'}
+                </span>
+            </td>
+            <td class="text-end">
+                <strong>$${mov.monto_total.toFixed(2)}</strong>
+            </td>
+            <td>
+                ${mov.factura_numero ? 
+                    `<a href="/factura/${mov.factura_id}" target="_blank">${mov.factura_numero}</a>` : 
+                    '<span class="text-muted">Sin factura</span>'}
+            </td>
+            <td class="text-center">
+                <button class="btn btn-sm btn-info" onclick="verProductosMovimiento(${mov.id})">
+                    <i class="fas fa-box"></i> Ver
+                </button>
+            </td>
+            <td class="text-center">
+                ${mov.estado === 'pendiente' ? 
+                    `<button class="btn btn-sm btn-success" onclick="cobrarMovimiento(${mov.id})">
+                        <i class="fas fa-cash-register"></i>
+                    </button>` : ''}
+            </td>
+        </tr>
+    `).join('');
+    
+    const modal = new bootstrap.Modal(document.getElementById('modalDetalleCliente'));
+    modal.show();
+}
+
+async function verProductosMovimiento(movimientoId) {
+    try {
+        const response = await fetch(`/api/cta_cte/productos_movimiento/${movimientoId}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            const tbody = document.getElementById('modal_tbody_productos');
+            tbody.innerHTML = data.productos.map(prod => `
+                <tr>
+                    <td>${prod.descripcion}</td>
+                    <td>${prod.cantidad}</td>
+                    <td>$${prod.precio_unitario.toFixed(2)}</td>
+                    <td class="text-end"><strong>$${prod.subtotal.toFixed(2)}</strong></td>
+                </tr>
+            `).join('');
+            
+            const modal = new bootstrap.Modal(document.getElementById('modalProductosMovimiento'));
+            modal.show();
+        }
+    } catch (error) {
+        console.error('Error:', error);
+    }
+}
+
+function cobrarCtaCte() {
+    if (!clienteSeleccionado) return;
+    
+    // Redirigir a nueva venta con el cliente seleccionado
+    window.location.href = `/nueva_venta?cliente_id=${clienteSeleccionado.id}&cargar_cta_cte=true`;
+}
+
+function cobrarMovimiento(movimientoId) {
+    Swal.fire({
+        title: '¿Cobrar este movimiento?',
+        text: 'Se abrirá nueva venta con estos productos',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, cobrar',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            window.location.href = `/nueva_venta?movimiento_id=${movimientoId}`;
+        }
+    });
+}
+
+function exportarExcel() {
+    // Crear un elemento <a> temporal para forzar la descarga
+    const link = document.createElement('a');
+    link.href = '/api/cta_cte/exportar_excel';
+    link.download = 'Cuentas_Corrientes.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // Mostrar mensaje
+    Swal.fire({
+        icon: 'success',
+        title: 'Excel Generado',
+        text: 'El archivo se está descargando...',
+        timer: 2000,
+        showConfirmButton: false
+    });
+}
+
+function exportarPDF() {
+    console.log('📤 Iniciando exportación a PDF...');
+    // Abrir en nueva ventana para mejor experiencia
+    window.open('/api/cta_cte/exportar_pdf', '_blank');
+    console.log('✅ Generación de PDF iniciada');
+}
+
+function imprimirReporte() {
+    window.print();
+}
+</script>
+
+<style>
+@media print {
+    .btn, .card-header, .modal { display: none !important; }
+}
+</style>
+{% endblock %}

@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Reporte de Estadísticas</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding: 20px;
+            background: white;
+            color: #333;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 3px solid #007bff;
+            padding-bottom: 20px;
+        }
+        
+        .header h1 {
+            color: #007bff;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        
+        .periodo {
+            font-size: 16px;
+            color: #666;
+            margin: 10px 0;
+        }
+        
+        .total-general {
+            font-size: 24px;
+            color: #28a745;
+            font-weight: bold;
+            margin: 15px 0;
+        }
+        
+        .cards-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin: 30px 0;
+        }
+        
+        .card {
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+        }
+        
+        .card.blue { border-color: #007bff; background: #e7f3ff; }
+        .card.green { border-color: #28a745; background: #e8f5e9; }
+        .card.orange { border-color: #fd7e14; background: #fff3e0; }
+        .card.purple { border-color: #6f42c1; background: #f3e5f5; }
+        .card.teal { border-color: #20c997; background: #e0f2f1; }
+        .card.red { border-color: #dc3545; background: #ffebee; }
+        
+        .card-icon {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+        
+        .card-title {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        
+        .card-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .section {
+            margin: 30px 0;
+        }
+        
+        .section-title {
+            font-size: 20px;
+            color: #007bff;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 5px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        
+        th {
+            background: #007bff;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+        
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+        
+        .text-right {
+            text-align: right;
+        }
+        
+        .calculos-box {
+            background: #f8f9fa;
+            border: 2px solid #007bff;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .calculo-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .calculo-row:last-child {
+            border-bottom: none;
+            font-size: 18px;
+            font-weight: bold;
+            color: #28a745;
+            margin-top: 10px;
+            padding-top: 15px;
+            border-top: 3px solid #28a745;
+        }
+        
+        .footer {
+            margin-top: 40px;
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+            border-top: 1px solid #e0e0e0;
+            padding-top: 15px;
+        }
+        
+        @media print {
+            body {
+                padding: 10px;
+            }
+            
+            .no-print {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 Estadísticas y Reportes</h1>
+        <div class="periodo">Período: {{ fecha_desde }} - {{ fecha_hasta }}</div>
+        <div class="total-general">Total General: ${{ "%.2f"|format(total_general) }}</div>
+    </div>
+
+    <div class="cards-container">
+        <div class="card blue">
+            <div class="card-icon">📊</div>
+            <div class="card-title">Tickets</div>
+            <div class="card-value">{{ cantidad_tickets }}</div>
+        </div>
+        
+        <div class="card green">
+            <div class="card-icon">💰</div>
+            <div class="card-title">Total</div>
+            <div class="card-value">${{ "%.2f"|format(total_general) }}</div>
+        </div>
+        
+        <div class="card orange">
+            <div class="card-icon">📝</div>
+            <div class="card-title">Neto</div>
+            <div class="card-value">${{ "%.2f"|format(neto_sin_iva) }}</div>
+        </div>
+        
+        <div class="card purple">
+            <div class="card-icon">🧾</div>
+            <div class="card-title">IVA</div>
+            <div class="card-value">${{ "%.2f"|format(iva_total) }}</div>
+        </div>
+        
+        <div class="card teal">
+            <div class="card-icon">📈</div>
+            <div class="card-title">Ticket Promedio</div>
+            <div class="card-value">${{ "%.2f"|format(ticket_promedio) }}</div>
+        </div>
+        
+        <div class="card red">
+            <div class="card-icon">💳</div>
+            <div class="card-title">Medios de Pago</div>
+            <div class="card-value">{{ medios_pago|length }}</div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2 class="section-title">Medios de Pago</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Medio de Pago</th>
+                    <th class="text-right">Transacciones</th>
+                    <th class="text-right">Total</th>
+                    <th class="text-right">%</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for medio in medios_pago %}
+                <tr>
+                    <td>{{ medio.medio_pago }}</td>
+                    <td class="text-right">{{ medio.cantidad }}</td>
+                    <td class="text-right">${{ "%.2f"|format(medio.total) }}</td>
+                    <td class="text-right">{{ "%.1f"|format(medio.porcentaje) }}%</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <h2 class="section-title">IVA Discriminado</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Alícuota</th>
+                    <th class="text-right">Importe IVA</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for iva in iva_discriminado %}
+                <tr>
+                    <td>{{ iva.alicuota }}</td>
+                    <td class="text-right">${{ "%.2f"|format(iva.importe) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="calculos-box">
+        <div class="calculo-row">
+            <span>Subtotal (Neto):</span>
+            <strong>${{ "%.2f"|format(neto_sin_iva) }}</strong>
+        </div>
+        <div class="calculo-row">
+            <span>IVA Total:</span>
+            <strong>${{ "%.2f"|format(iva_total) }}</strong>
+        </div>
+        <div class="calculo-row">
+            <span>Total General:</span>
+            <strong>${{ "%.2f"|format(total_general) }}</strong>
+        </div>
+    </div>
+
+    <div class="footer">
+        Reporte generado el {{ fecha_actual }}<br>
+        FactuFacil - Sistema de Gestión
+    </div>
+
+    <script>
+        // Auto-imprimir cuando se carga la página
+        window.onload = function() {
+            window.print();
+        }
+    </script>
+</body>
+</html>

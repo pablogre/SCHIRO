@@ -1,0 +1,39 @@
+# Flask y extensiones
+Flask==3.0.0
+Flask-SQLAlchemy==3.1.1
+
+# Base de datos
+PyMySQL==1.1.0
+MySQLdb==1.4.6
+SQLAlchemy==2.0.23
+
+# Seguridad y encriptación
+Werkzeug==3.0.1
+cryptography==41.0.7
+
+# Cliente SOAP para AFIP
+zeep==4.2.1
+lxml==4.9.3
+
+# Requests y certificados SSL
+requests==2.31.0
+urllib3==2.1.0
+
+# Generación de QR (AFIP)
+qrcode==7.4.2
+Pillow==10.1.0
+
+# Manejo de fechas y tiempos
+python-dateutil==2.8.2
+
+# Impresión térmica (Windows)
+pywin32==306
+
+# Generación de PDFs
+reportlab==4.0.7
+
+# Procesamiento de datos
+python-decimal==0.1.0
+
+# Variables de entorno
+python-dotenv==1.0.0

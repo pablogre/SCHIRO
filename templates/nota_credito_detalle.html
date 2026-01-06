@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+
+{% block title %}Detalle Nota de Crédito{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <a href="/notas_credito" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Volver al Listado
+            </a>
+        </div>
+    </div>
+
+    <div id="detalle-container">
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="sr-only">Cargando...</span>
+            </div>
+            <p>Cargando detalle de nota de crédito...</p>
+        </div>
+    </div>
+</div>
+
+<script>
+const ncId = {{ nc_id }};
+
+document.addEventListener('DOMContentLoaded', function() {
+    cargarDetalle();
+});
+
+function cargarDetalle() {
+    fetch('/api/notas_credito/' + ncId)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                mostrarDetalle(data.nota_credito);
+            } else {
+                document.getElementById('detalle-container').innerHTML = 
+                    '<div class="alert alert-danger">Error al cargar la nota de crédito: ' + data.error + '</div>';
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('detalle-container').innerHTML = 
+                '<div class="alert alert-danger">Error al cargar la nota de crédito</div>';
+        });
+}
+
+function mostrarDetalle(nc) {
+    // Badge de estado
+    let badgeEstado = '';
+    if (nc.estado === 'Autorizada') {
+        badgeEstado = '<span class="badge badge-success badge-lg">Autorizada</span>';
+    } else if (nc.estado === 'Error AFIP') {
+        badgeEstado = '<span class="badge badge-danger badge-lg">Error AFIP</span>';
+    } else {
+        badgeEstado = '<span class="badge badge-warning badge-lg">Pendiente</span>';
+    }
+    
+    let html = `
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4><i class="fas fa-file-invoice"></i> Nota de Crédito ${nc.numero}</h4>
+                ${badgeEstado}
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5>Información General</h5>
+                        <table class="table table-sm">
+                            <tr>
+                                <th>Número:</th>
+                                <td>${nc.numero}</td>
+                            </tr>
+                            <tr>
+                                <th>Fecha:</th>
+                                <td>${nc.fecha}</td>
+                            </tr>
+                            <tr>
+                                <th>Tipo:</th>
+                                <td>${nc.tipo_comprobante}</td>
+                            </tr>
+                            <tr>
+                                <th>Factura Asociada:</th>
+                                <td><a href="/facturas/detalle/${nc.factura.id}">${nc.factura.numero}</a> (${nc.factura.fecha})</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h5>Cliente</h5>
+                        <table class="table table-sm">
+                            <tr>
+                                <th>Razón Social:</th>
+                                <td>${nc.cliente.razon_social}</td>
+                            </tr>
+                            <tr>
+                                <th>CUIT:</th>
+                                <td>${nc.cliente.cuit}</td>
+                            </tr>
+                            <tr>
+                                <th>Domicilio:</th>
+                                <td>${nc.cliente.domicilio || '-'}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <hr>
+
+                <div class="row">
+                    <div class="col-md-12">
+                        <h5>Autorización AFIP</h5>
+                        <table class="table table-sm">
+                            <tr>
+                                <th>CAE:</th>
+                                <td>${nc.cae || '<span class="text-muted">Sin autorizar</span>'}</td>
+                            </tr>
+                            <tr>
+                                <th>Vencimiento CAE:</th>
+                                <td>${nc.cae_vencimiento || '-'}</td>
+                            </tr>
+                            ${nc.error_afip ? `
+                            <tr>
+                                <th>Error AFIP:</th>
+                                <td><span class="text-danger">${nc.error_afip}</span></td>
+                            </tr>
+                            ` : ''}
+                            ${nc.observaciones ? `
+                            <tr>
+                                <th>Observaciones:</th>
+                                <td>${nc.observaciones}</td>
+                            </tr>
+                            ` : ''}
+                        </table>
+                    </div>
+                </div>
+
+                <hr>
+
+                <div class="row">
+                    <div class="col-md-12">
+                        <h5>Detalle de Productos</h5>
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Código</th>
+                                        <th>Producto</th>
+                                        <th>Cantidad</th>
+                                        <th>Precio Unit.</th>
+                                        <th>Subtotal</th>
+                                        <th>IVA</th>
+                                        <th>Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>`;
+    
+    nc.detalles.forEach(detalle => {
+        html += `
+                                    <tr>
+                                        <td>${detalle.codigo}</td>
+                                        <td>${detalle.producto}</td>
+                                        <td>${detalle.cantidad}</td>
+                                        <td>$ ${detalle.precio_unitario.toFixed(2)}</td>
+                                        <td>$ ${detalle.subtotal.toFixed(2)}</td>
+                                        <td>${detalle.iva}%</td>
+                                        <td>$ ${detalle.total.toFixed(2)}</td>
+                                    </tr>`;
+    });
+    
+    html += `
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <hr>
+
+                <div class="row">
+                    <div class="col-md-8"></div>
+                    <div class="col-md-4">
+                        <table class="table table-sm">
+                            <tr>
+                                <th>Subtotal:</th>
+                                <td class="text-right">$ ${nc.subtotal.toFixed(2)}</td>
+                            </tr>
+                            <tr>
+                                <th>IVA:</th>
+                                <td class="text-right">$ ${nc.iva.toFixed(2)}</td>
+                            </tr>
+                            <tr class="table-primary">
+                                <th><strong>TOTAL:</strong></th>
+                                <td class="text-right"><strong>$ ${nc.total.toFixed(2)}</strong></td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('detalle-container').innerHTML = html;
+}
+</script>
+{% endblock %}

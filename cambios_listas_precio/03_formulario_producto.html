@@ -1,0 +1,166 @@
+<!-- =====================================================
+     CAMBIOS PARA productos.html - Listas de Precios
+     =====================================================
+     INSTRUCCIONES: Reemplazar la sección de "Costos y Precios"
+     del modal de producto (líneas 222-268 aproximadamente)
+     ===================================================== -->
+
+<!-- Costos y Precios MEJORADO CON 5 LISTAS -->
+<div class="card mb-3 bg-light">
+    <div class="card-header bg-info text-white">
+        <h6 class="mb-0"><i class="fas fa-calculator"></i> Costos y Listas de Precios</h6>
+    </div>
+    <div class="card-body">
+        <!-- Precio de Costo -->
+        <div class="row mb-3">
+            <div class="col-md-4">
+                <label for="costo" class="form-label fw-bold">Precio de Costo *</label>
+                <div class="input-group">
+                    <span class="input-group-text">$</span>
+                    <input type="number" class="form-control form-control-lg" id="costo" step="0.01" min="0.01" required>
+                </div>
+                <small class="form-text text-muted">Costo sin IVA - Base para calcular todos los precios</small>
+            </div>
+        </div>
+        
+        <hr>
+        
+        <!-- LISTAS DE PRECIOS -->
+        <h6 class="text-primary mb-3"><i class="fas fa-tags"></i> Listas de Precios (Margen sobre costo)</h6>
+        
+        <div class="row">
+            <!-- Lista 1 - Minorista -->
+            <div class="col-md-4 col-lg mb-3">
+                <div class="card h-100 border-primary">
+                    <div class="card-header bg-primary text-white py-2">
+                        <small class="fw-bold"><i class="fas fa-user"></i> Lista 1 - Minorista</small>
+                    </div>
+                    <div class="card-body p-2">
+                        <div class="mb-2">
+                            <label class="form-label small mb-1">Margen %</label>
+                            <div class="input-group input-group-sm">
+                                <input type="number" class="form-control" id="margen" step="0.01" min="0" value="30">
+                                <span class="input-group-text">%</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="form-label small mb-1">Precio</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control bg-warning" id="precio" step="0.01" readonly>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Lista 2 - Mayorista -->
+            <div class="col-md-4 col-lg mb-3">
+                <div class="card h-100 border-success">
+                    <div class="card-header bg-success text-white py-2">
+                        <small class="fw-bold"><i class="fas fa-store"></i> Lista 2 - Mayorista</small>
+                    </div>
+                    <div class="card-body p-2">
+                        <div class="mb-2">
+                            <label class="form-label small mb-1">Margen %</label>
+                            <div class="input-group input-group-sm">
+                                <input type="number" class="form-control" id="margen2" step="0.01" min="0" placeholder="Opcional">
+                                <span class="input-group-text">%</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="form-label small mb-1">Precio</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control bg-light" id="precio2" step="0.01" readonly>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Lista 3 - Distribuidor -->
+            <div class="col-md-4 col-lg mb-3">
+                <div class="card h-100 border-info">
+                    <div class="card-header bg-info text-white py-2">
+                        <small class="fw-bold"><i class="fas fa-truck"></i> Lista 3 - Distribuidor</small>
+                    </div>
+                    <div class="card-body p-2">
+                        <div class="mb-2">
+                            <label class="form-label small mb-1">Margen %</label>
+                            <div class="input-group input-group-sm">
+                                <input type="number" class="form-control" id="margen3" step="0.01" min="0" placeholder="Opcional">
+                                <span class="input-group-text">%</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="form-label small mb-1">Precio</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control bg-light" id="precio3" step="0.01" readonly>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Lista 4 - Especial -->
+            <div class="col-md-6 col-lg mb-3">
+                <div class="card h-100 border-warning">
+                    <div class="card-header bg-warning text-dark py-2">
+                        <small class="fw-bold"><i class="fas fa-star"></i> Lista 4 - Especial</small>
+                    </div>
+                    <div class="card-body p-2">
+                        <div class="mb-2">
+                            <label class="form-label small mb-1">Margen %</label>
+                            <div class="input-group input-group-sm">
+                                <input type="number" class="form-control" id="margen4" step="0.01" min="0" placeholder="Opcional">
+                                <span class="input-group-text">%</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="form-label small mb-1">Precio</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control bg-light" id="precio4" step="0.01" readonly>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Lista 5 - Promocional -->
+            <div class="col-md-6 col-lg mb-3">
+                <div class="card h-100 border-danger">
+                    <div class="card-header bg-danger text-white py-2">
+                        <small class="fw-bold"><i class="fas fa-percentage"></i> Lista 5 - Promocional</small>
+                    </div>
+                    <div class="card-body p-2">
+                        <div class="mb-2">
+                            <label class="form-label small mb-1">Margen %</label>
+                            <div class="input-group input-group-sm">
+                                <input type="number" class="form-control" id="margen5" step="0.01" min="0" placeholder="Opcional">
+                                <span class="input-group-text">%</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="form-label small mb-1">Precio</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control bg-light" id="precio5" step="0.01" readonly>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Indicador visual -->
+        <div class="alert alert-info mb-0 mt-2">
+            <i class="fas fa-info-circle"></i> 
+            <strong>Cálculo:</strong> Precio = Costo × (1 + Margen/100)
+            <br>
+            <small id="formulaEjemplo">Las listas opcionales que no completes usarán el precio de Lista 1</small>
+        </div>
+    </div>
+</div>

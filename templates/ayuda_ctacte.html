@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>¿Cómo funciona Cuenta Corriente?</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .seccion {
+            margin-bottom: 40px;
+        }
+
+        .seccion h2 {
+            color: #667eea;
+            font-size: 1.8em;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #667eea;
+        }
+
+        .seccion h3 {
+            color: #764ba2;
+            font-size: 1.4em;
+            margin-top: 25px;
+            margin-bottom: 10px;
+        }
+
+        .seccion p {
+            font-size: 1.1em;
+            line-height: 1.8;
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .paso {
+            background: #f8f9ff;
+            border-left: 5px solid #667eea;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+
+        .paso-numero {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 35px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        .paso-titulo {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .ventaja {
+            background: #e8f5e9;
+            border-left: 5px solid #4caf50;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+        }
+
+        .ventaja::before {
+            content: "✓ ";
+            color: #4caf50;
+            font-weight: bold;
+            font-size: 1.3em;
+        }
+
+        .importante {
+            background: #fff3e0;
+            border-left: 5px solid #ff9800;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+
+        .importante::before {
+            content: "⚠️ ";
+            font-size: 1.3em;
+            margin-right: 8px;
+        }
+
+        .importante strong {
+            color: #ff9800;
+        }
+
+        .ejemplo {
+            background: #e3f2fd;
+            border: 2px solid #2196f3;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+
+        .ejemplo-titulo {
+            color: #2196f3;
+            font-weight: bold;
+            font-size: 1.2em;
+            margin-bottom: 10px;
+        }
+
+        .flujo {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+
+        .flujo-item {
+            background: #667eea;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 10px;
+            text-align: center;
+            flex: 1;
+            margin: 5px;
+            min-width: 150px;
+        }
+
+        .flujo-flecha {
+            font-size: 2em;
+            color: #667eea;
+            margin: 0 10px;
+        }
+
+        .btn-cerrar {
+            display: block;
+            width: 200px;
+            margin: 30px auto 0;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .btn-cerrar:hover {
+            transform: scale(1.05);
+        }
+
+        .lista-checks {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .lista-checks li {
+            padding: 10px 0;
+            font-size: 1.1em;
+        }
+
+        .lista-checks li::before {
+            content: "✓ ";
+            color: #4caf50;
+            font-weight: bold;
+            font-size: 1.3em;
+            margin-right: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8em;
+            }
+
+            .content {
+                padding: 20px;
+            }
+
+            .flujo {
+                flex-direction: column;
+            }
+
+            .flujo-flecha {
+                transform: rotate(90deg);
+                margin: 10px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>💳 ¿Cómo funciona Cuenta Corriente?</h1>
+            <p>Guía completa para ventas fiadas</p>
+        </div>
+
+        <div class="content">
+            <!-- ¿QUÉ ES? -->
+            <div class="seccion">
+                <h2>📋 ¿Qué es Cuenta Corriente?</h2>
+                <p>
+                    <strong>Cuenta Corriente (CTA.CTE)</strong> te permite registrar ventas donde el cliente 
+                    se lleva la mercadería ahora pero paga después. Es ideal para clientes de confianza 
+                    que compran regularmente.
+                </p>
+
+                <div class="ventaja">
+                    El sistema descuenta automáticamente el stock al momento de la venta fiada
+                </div>
+                <div class="ventaja">
+                    No se emite factura hasta que el cliente pague
+                </div>
+                <div class="ventaja">
+                    Puedes ver el saldo pendiente de cada cliente en tiempo real
+                </div>
+            </div>
+
+            <!-- FLUJO DE TRABAJO -->
+            <div class="seccion">
+                <h2>🔄 Flujo de trabajo</h2>
+                
+                <div class="flujo">
+                    <div class="flujo-item">
+                        <strong>1. Venta Fiada</strong><br>
+                        Cliente se lleva productos
+                    </div>
+                    <div class="flujo-flecha">→</div>
+                    <div class="flujo-item">
+                        <strong>2. Queda Pendiente</strong><br>
+                        Se registra la deuda
+                    </div>
+                    <div class="flujo-flecha">→</div>
+                    <div class="flujo-item">
+                        <strong>3. Pago</strong><br>
+                        Cliente paga cuando puede
+                    </div>
+                    <div class="flujo-flecha">→</div>
+                    <div class="flujo-item">
+                        <strong>4. Factura</strong><br>
+                        Recién ahí se emite
+                    </div>
+                </div>
+            </div>
+
+            <!-- CÓMO HACER UNA VENTA FIADA -->
+            <div class="seccion">
+                <h2>🛒 Cómo hacer una venta fiada</h2>
+
+                <div class="paso">
+                    <div class="paso-titulo">
+                        <span class="paso-numero">1</span>
+                        Selecciona el cliente
+                    </div>
+                    <p>Busca y selecciona el cliente que va a comprar fiado. <strong>Es obligatorio elegir un cliente</strong> para ventas en cuenta corriente.</p>
+                </div>
+
+                <div class="paso">
+                    <div class="paso-titulo">
+                        <span class="paso-numero">2</span>
+                        Agrega los productos
+                    </div>
+                    <p>Escanea o busca los productos que el cliente se va a llevar. Ajusta las cantidades según corresponda.</p>
+                </div>
+
+                <div class="paso">
+                    <div class="paso-titulo">
+                        <span class="paso-numero">3</span>
+                        En "Medio de pago" selecciona "CTA.CTE"
+                    </div>
+                    <p>Al elegir Cuenta Corriente, <strong>NO</strong> puedes combinarlo con otros medios de pago (efectivo, tarjeta, etc.)</p>
+                </div>
+
+                <div class="paso">
+                    <div class="paso-titulo">
+                        <span class="paso-numero">4</span>
+                        Confirma la venta
+                    </div>
+                    <p>El sistema automáticamente:</p>
+                    <ul class="lista-checks">
+                        <li>Descuenta el stock de los productos</li>
+                        <li>Registra la deuda del cliente</li>
+                        <li>NO emite factura (se hará cuando pague)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- EJEMPLO PRÁCTICO -->
+            <div class="seccion">
+                <h2>💡 Ejemplo práctico</h2>
+                
+                <div class="ejemplo">
+                    <div class="ejemplo-titulo">📅 Lunes 11 de noviembre - Venta Fiada</div>
+                    <p>
+                        <strong>Juan Pérez</strong> viene al negocio y compra:
+                    </p>
+                    <ul style="margin-left: 30px; margin-top: 10px;">
+                        <li>2 x Coca Cola 1.5L - $2.469,42</li>
+                        <li>1 x Pan Lactal - $1.234,71</li>
+                    </ul>
+                    <p style="margin-top: 15px;">
+                        <strong>Total: $3.704,13</strong>
+                    </p>
+                    <p style="margin-top: 10px;">
+                        ✓ Juan se lleva los productos<br>
+                        ✓ Stock se descuenta automáticamente<br>
+                        ✓ Queda registrado en su cuenta corriente<br>
+                        ✗ NO se emite factura todavía
+                    </p>
+                </div>
+
+                <div class="ejemplo" style="margin-top: 20px;">
+                    <div class="ejemplo-titulo">💰 Viernes 15 de noviembre - Pago</div>
+                    <p>
+                        Juan vuelve y dice: <em>"Quiero pagar lo que debo"</em>
+                    </p>
+                    <p style="margin-top: 15px;">
+                        Vas a <strong>CTA.CTE → Juan Pérez → Seleccionar productos → Pagar</strong>
+                    </p>
+                    <p style="margin-top: 10px;">
+                        ✓ Recién ahí se emite la factura<br>
+                        ✓ Se registra el pago (efectivo, tarjeta, etc.)<br>
+                        ✓ La deuda queda saldada
+                    </p>
+                </div>
+            </div>
+
+            <!-- IMPORTANTE -->
+            <div class="seccion">
+                <h2>⚠️ Importante tener en cuenta</h2>
+
+                <div class="importante">
+                    <strong>NO puedes combinar CTA.CTE con otros medios de pago</strong><br>
+                    Si eliges Cuenta Corriente, toda la venta debe ser fiada. No puedes pagar una parte en efectivo y otra fiada.
+                </div>
+
+                <div class="importante">
+                    <strong>NO puedes pagar productos ya fiados y agregar más productos fiados en la misma operación</strong><br>
+                    Primero paga lo pendiente, y luego haz otra venta fiada si el cliente quiere llevar más productos.
+                </div>
+
+                <div class="importante">
+                    <strong>El stock se descuenta inmediatamente</strong><br>
+                    Aunque el cliente no pague todavía, los productos ya no están disponibles en tu inventario.
+                </div>
+            </div>
+
+            <!-- CÓMO COBRAR -->
+            <div class="seccion">
+                <h2>💵 Cómo cobrar lo adeudado</h2>
+
+                <h3>Opción 1: Desde el módulo CTA.CTE</h3>
+                <div class="paso">
+                    <div class="paso-titulo">
+                        <span class="paso-numero">1</span>
+                        Ir a CTA.CTE en el menú
+                    </div>
+                    <p>Verás un listado de todos los clientes con deudas pendientes</p>
+                </div>
+
+                <div class="paso">
+                    <div class="paso-titulo">
+                        <span class="paso-numero">2</span>
+                        Buscar el cliente
+                    </div>
+                    <p>Haz clic en "Ver detalle" del cliente que viene a pagar</p>
+                </div>
+
+                <div class="paso">
+                    <div class="paso-titulo">
+                        <span class="paso-numero">3</span>
+                        Seleccionar productos a pagar
+                    </div>
+                    <p>Marca los productos que el cliente va a pagar en este momento. Puede pagar todo o solo algunos productos.</p>
+                </div>
+
+                <div class="paso">
+                    <div class="paso-titulo">
+                        <span class="paso-numero">4</span>
+                        Elegir medio de pago y facturar
+                    </div>
+                    <p>Selecciona cómo paga (efectivo, tarjeta, transferencia) y confirma. Se emitirá la factura automáticamente.</p>
+                </div>
+
+                <h3 style="margin-top: 30px;">Opción 2: Desde Nueva Venta</h3>
+                <div class="paso">
+                    <div class="paso-titulo">
+                        <span class="paso-numero">1</span>
+                        Seleccionar el cliente
+                    </div>
+                    <p>El sistema te mostrará automáticamente si tiene productos pendientes de pago</p>
+                </div>
+
+                <div class="paso">
+                    <div class="paso-titulo">
+                        <span class="paso-numero">2</span>
+                        Clic en "Ver productos pendientes"
+                    </div>
+                    <p>Se abrirá un listado de todo lo que el cliente debe</p>
+                </div>
+
+                <div class="paso">
+                    <div class="paso-titulo">
+                        <span class="paso-numero">3</span>
+                        Seleccionar y pagar
+                    </div>
+                    <p>Marca lo que va a pagar, elige el medio de pago y confirma. Se facturará automáticamente.</p>
+                </div>
+            </div>
+
+            <!-- VENTAJAS -->
+            <div class="seccion">
+                <h2>✨ Ventajas del sistema</h2>
+                
+                <div class="ventaja">
+                    <strong>Control total:</strong> Sabes exactamente quién te debe y cuánto
+                </div>
+
+                <div class="ventaja">
+                    <strong>Flexibilidad:</strong> El cliente puede pagar todo junto o de a poco
+                </div>
+
+                <div class="ventaja">
+                    <strong>Facturación correcta:</strong> Se factura recién cuando se cobra, cumpliendo con AFIP
+                </div>
+
+                <div class="ventaja">
+                    <strong>Historial completo:</strong> Registra todas las operaciones con fechas y detalles
+                </div>
+
+                <div class="ventaja">
+                    <strong>Stock actualizado:</strong> No hay riesgo de vender productos que ya salieron fiados
+                </div>
+            </div>
+
+            
+        </div>
+    </div>
+</body>
+</html>

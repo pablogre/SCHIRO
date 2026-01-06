@@ -1,0 +1,477 @@
+{% extends "base.html" %}
+{% block title %}Auditoría de Stock{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-clipboard-list text-primary"></i> Auditoría de Stock</h2>
+        <div>
+            <button class="btn btn-outline-secondary" onclick="exportarExcel()">
+                <i class="fas fa-file-excel"></i> Exportar
+            </button>
+            <button class="btn btn-primary" onclick="cargarMovimientos()">
+                <i class="fas fa-sync"></i> Actualizar
+            </button>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-header bg-light">
+            <i class="fas fa-filter"></i> Filtros
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-2">
+                    <label class="form-label">Código Producto</label>
+                    <input type="text" class="form-control" id="filtroCodigo" 
+                           placeholder="Ej: 102.1030" onkeyup="filtrarConDelay()">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Tipo Movimiento</label>
+                    <select class="form-select" id="filtroTipo" onchange="cargarMovimientos()">
+                        <option value="">Todos</option>
+                        <option value="venta">Venta</option>
+                        <option value="venta_fiada">Venta Fiada (CTA.CTE)</option>
+                        <option value="ajuste_entrada">Entrada Manual</option>
+                        <option value="ajuste_salida">Salida Manual</option>
+                        <option value="ajuste_manual">Ajuste Directo</option>
+                        <option value="combo">Descuento Combo</option>
+                        <option value="devolucion">Devolución</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Desde</label>
+                    <input type="date" class="form-control" id="filtroDesde" onchange="cargarMovimientos()">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Hasta</label>
+                    <input type="date" class="form-control" id="filtroHasta" onchange="cargarMovimientos()">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Límite</label>
+                    <select class="form-select" id="filtroLimite" onchange="cargarMovimientos()">
+                        <option value="50">50 registros</option>
+                        <option value="100" selected>100 registros</option>
+                        <option value="500">500 registros</option>
+                        <option value="1000">1000 registros</option>
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button class="btn btn-secondary w-100" onclick="limpiarFiltros()">
+                        <i class="fas fa-eraser"></i> Limpiar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Resumen Rápido -->
+    <div class="row mb-4" id="resumenCards">
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body text-center">
+                    <h5><i class="fas fa-arrow-up"></i> Entradas</h5>
+                    <h3 id="entradasHoy">0.00</h3>
+                    <small>(del filtro actual)</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-danger text-white">
+                <div class="card-body text-center">
+                    <h5><i class="fas fa-arrow-down"></i> Salidas</h5>
+                    <h3 id="salidasHoy">0.00</h3>
+                    <small>(del filtro actual)</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body text-center">
+                    <h5><i class="fas fa-exchange-alt"></i> Movimientos</h5>
+                    <h3 id="movimientosHoy">0</h3>
+                    <small>(del filtro actual)</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-dark">
+                <div class="card-body text-center">
+                    <h5><i class="fas fa-exclamation-triangle"></i> Discrepancias</h5>
+                    <h3 id="discrepancias">0</h3>
+                    <small>(total sistema)</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla de Movimientos -->
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <i class="fas fa-list"></i> Movimientos de Stock
+            <span class="badge bg-light text-dark ms-2" id="totalRegistros">0</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped mb-0" id="tablaMovimientos">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Fecha/Hora</th>
+                            <th>Código</th>
+                            <th>Producto</th>
+                            <th>Tipo</th>
+                            <th class="text-center">Movimiento</th>
+                            <th class="text-end">Anterior</th>
+                            <th class="text-end">Nuevo</th>
+                            <th>Referencia</th>
+                            <th>Usuario</th>
+                            <th>Motivo</th>
+                        </tr>
+                    </thead>
+                    <tbody id="bodyMovimientos">
+                        <tr>
+                            <td colspan="10" class="text-center py-4">
+                                <i class="fas fa-spinner fa-spin"></i> Cargando...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Detalle Producto -->
+<div class="modal fade" id="modalDetalleProducto" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-box"></i> Historial de Producto
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="modalDetalleBody">
+                <!-- Contenido dinámico -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.badge-entrada { background-color: #28a745; }
+.badge-salida { background-color: #dc3545; }
+.badge-tipo {
+    font-size: 0.75rem;
+    padding: 0.3em 0.6em;
+}
+.tipo-venta { background-color: #17a2b8; }
+.tipo-venta_fiada { background-color: #ffc107; color: #000; }
+.tipo-ajuste_entrada { background-color: #28a745; }
+.tipo-ajuste_salida { background-color: #dc3545; }
+.tipo-ajuste_manual { background-color: #6c757d; }
+.tipo-combo { background-color: #6f42c1; }
+.tipo-devolucion { background-color: #fd7e14; }
+
+.movimiento-positivo { color: #28a745; font-weight: bold; }
+.movimiento-negativo { color: #dc3545; font-weight: bold; }
+
+.cursor-pointer { cursor: pointer; }
+.hover-highlight:hover { background-color: #f0f8ff !important; }
+</style>
+
+<script>
+let filtroTimeout = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Fechas por defecto: últimos 7 días - usar fecha local
+    const hoy = new Date();
+    const hace7dias = new Date();
+    hace7dias.setDate(hoy.getDate() - 7);
+    
+    const formatoFecha = (d) => d.getFullYear() + '-' + 
+                                String(d.getMonth() + 1).padStart(2, '0') + '-' + 
+                                String(d.getDate()).padStart(2, '0');
+    
+    document.getElementById('filtroHasta').value = formatoFecha(hoy);
+    document.getElementById('filtroDesde').value = formatoFecha(hace7dias);
+    
+    cargarMovimientos();
+    cargarResumen();
+});
+
+function filtrarConDelay() {
+    clearTimeout(filtroTimeout);
+    filtroTimeout = setTimeout(cargarMovimientos, 500);
+}
+
+function cargarMovimientos() {
+    const codigo = document.getElementById('filtroCodigo').value;
+    const tipo = document.getElementById('filtroTipo').value;
+    const desde = document.getElementById('filtroDesde').value;
+    const hasta = document.getElementById('filtroHasta').value;
+    const limite = document.getElementById('filtroLimite').value;
+    
+    let url = `/api/stock_audit/movimientos?limit=${limite}`;
+    if (codigo) url += `&codigo=${encodeURIComponent(codigo)}`;
+    if (tipo) url += `&tipo=${tipo}`;
+    if (desde) url += `&fecha_desde=${desde}`;
+    if (hasta) url += `&fecha_hasta=${hasta}`;
+    
+    fetch(url)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                renderizarMovimientos(data.movimientos);
+                document.getElementById('totalRegistros').textContent = data.total;
+                
+                // Calcular resumen de los movimientos cargados
+                actualizarResumen(data.movimientos);
+            } else {
+                mostrarError('Error cargando movimientos');
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            document.getElementById('bodyMovimientos').innerHTML = `
+                <tr><td colspan="10" class="text-center text-danger py-4">
+                    <i class="fas fa-exclamation-circle"></i> Error al cargar datos
+                </td></tr>`;
+        });
+}
+
+function actualizarResumen(movimientos) {
+    let entradas = 0, salidas = 0;
+    
+    movimientos.forEach(m => {
+        if (m.signo === '+') {
+            entradas += m.cantidad;
+        } else {
+            salidas += m.cantidad;
+        }
+    });
+    
+    document.getElementById('entradasHoy').textContent = entradas.toFixed(2);
+    document.getElementById('salidasHoy').textContent = salidas.toFixed(2);
+    document.getElementById('movimientosHoy').textContent = movimientos.length;
+}
+
+function renderizarMovimientos(movimientos) {
+    const tbody = document.getElementById('bodyMovimientos');
+    
+    if (movimientos.length === 0) {
+        tbody.innerHTML = `
+            <tr><td colspan="10" class="text-center py-4">
+                <i class="fas fa-inbox"></i> No hay movimientos con estos filtros
+            </td></tr>`;
+        return;
+    }
+    
+    tbody.innerHTML = movimientos.map(m => `
+        <tr class="hover-highlight">
+            <td><small>${m.fecha}</small></td>
+            <td>
+                <a href="#" onclick="verDetalleProducto(${m.producto_id}); return false;" 
+                   class="text-decoration-none fw-bold">
+                    ${m.codigo || '-'}
+                </a>
+            </td>
+            <td><small>${(m.nombre || '').substring(0, 40)}${(m.nombre || '').length > 40 ? '...' : ''}</small></td>
+            <td><span class="badge badge-tipo tipo-${m.tipo}">${formatearTipo(m.tipo)}</span></td>
+            <td class="text-center">
+                <span class="${m.signo === '+' ? 'movimiento-positivo' : 'movimiento-negativo'}">
+                    ${m.signo}${m.cantidad}
+                </span>
+            </td>
+            <td class="text-end">${m.stock_anterior !== null ? m.stock_anterior.toFixed(2) : '-'}</td>
+            <td class="text-end fw-bold">${m.stock_nuevo !== null ? m.stock_nuevo.toFixed(2) : '-'}</td>
+            <td><small>${m.referencia_tipo ? m.referencia_tipo + ' #' + m.referencia_id : '-'}</small></td>
+            <td><small>${m.usuario || '-'}</small></td>
+            <td><small>${(m.motivo || '-').substring(0, 30)}</small></td>
+        </tr>
+    `).join('');
+}
+
+function formatearTipo(tipo) {
+    const tipos = {
+        'venta': 'Venta',
+        'venta_fiada': 'Fiado',
+        'ajuste_entrada': 'Entrada',
+        'ajuste_salida': 'Salida',
+        'ajuste_manual': 'Ajuste',
+        'combo': 'Combo',
+        'devolucion': 'Devolución'
+    };
+    return tipos[tipo] || tipo;
+}
+
+function cargarResumen() {
+    // Solo cargar discrepancias - el resumen de entradas/salidas se calcula en cargarMovimientos
+    fetch('/api/stock_audit/discrepancias')
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const elem = document.getElementById('discrepancias');
+                elem.textContent = data.total;
+                if (data.total > 0) {
+                    elem.parentElement.parentElement.classList.add('cursor-pointer');
+                    elem.parentElement.parentElement.onclick = () => mostrarDiscrepancias(data.discrepancias);
+                }
+            }
+        })
+        .catch(err => {
+            console.error('Error cargando discrepancias:', err);
+            document.getElementById('discrepancias').textContent = '?';
+        });
+}
+
+function verDetalleProducto(productoId) {
+    fetch(`/api/stock_audit/reporte_producto/${productoId}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                renderizarDetalleProducto(data);
+                new bootstrap.Modal(document.getElementById('modalDetalleProducto')).show();
+            }
+        });
+}
+
+function renderizarDetalleProducto(data) {
+    const body = document.getElementById('modalDetalleBody');
+    
+    body.innerHTML = `
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <h5>${data.producto.codigo} - ${data.producto.nombre}</h5>
+                <p class="mb-0">
+                    <strong>Stock Actual:</strong> 
+                    <span class="h4 text-primary">${data.producto.stock_actual}</span>
+                </p>
+            </div>
+            <div class="col-md-6">
+                <div class="row text-center">
+                    <div class="col-4">
+                        <div class="bg-success text-white rounded p-2">
+                            <small>Entradas</small><br>
+                            <strong>${data.total_entradas.toFixed(2)}</strong>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="bg-danger text-white rounded p-2">
+                            <small>Salidas</small><br>
+                            <strong>${data.total_salidas.toFixed(2)}</strong>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="bg-info text-white rounded p-2">
+                            <small>Balance</small><br>
+                            <strong>${data.balance.toFixed(2)}</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <h6>Últimos 50 movimientos</h6>
+        <div class="table-responsive" style="max-height: 400px;">
+            <table class="table table-sm table-striped">
+                <thead class="table-dark sticky-top">
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Tipo</th>
+                        <th class="text-center">Mov.</th>
+                        <th class="text-end">Anterior</th>
+                        <th class="text-end">Nuevo</th>
+                        <th>Ref.</th>
+                        <th>Usuario</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${data.ultimos_movimientos.map(m => `
+                        <tr>
+                            <td><small>${m.fecha}</small></td>
+                            <td><span class="badge badge-tipo tipo-${m.tipo}">${formatearTipo(m.tipo)}</span></td>
+                            <td class="text-center ${m.signo === '+' ? 'movimiento-positivo' : 'movimiento-negativo'}">
+                                ${m.signo}${m.cantidad}
+                            </td>
+                            <td class="text-end">${m.stock_anterior !== null ? m.stock_anterior : '-'}</td>
+                            <td class="text-end fw-bold">${m.stock_nuevo !== null ? m.stock_nuevo : '-'}</td>
+                            <td><small>${m.referencia}</small></td>
+                            <td><small>${m.usuario}</small></td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+function mostrarDiscrepancias(discrepancias) {
+    const body = document.getElementById('modalDetalleBody');
+    
+    body.innerHTML = `
+        <h5 class="text-warning"><i class="fas fa-exclamation-triangle"></i> Productos con Discrepancias</h5>
+        <p class="text-muted">Productos donde el stock actual difiere del último movimiento registrado</p>
+        
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Código</th>
+                        <th>Producto</th>
+                        <th class="text-end">Stock Actual</th>
+                        <th class="text-end">Último Registro</th>
+                        <th class="text-end">Diferencia</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${discrepancias.map(d => `
+                        <tr class="cursor-pointer" onclick="verDetalleProducto(${d.id})">
+                            <td><strong>${d.codigo}</strong></td>
+                            <td>${d.nombre}</td>
+                            <td class="text-end">${d.stock_actual.toFixed(2)}</td>
+                            <td class="text-end">${d.ultimo_registrado ? d.ultimo_registrado.toFixed(2) : '-'}</td>
+                            <td class="text-end ${d.diferencia > 0 ? 'text-success' : 'text-danger'}">
+                                ${d.diferencia ? (d.diferencia > 0 ? '+' : '') + d.diferencia.toFixed(2) : '-'}
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    document.querySelector('#modalDetalleProducto .modal-title').innerHTML = 
+        '<i class="fas fa-exclamation-triangle text-warning"></i> Discrepancias de Stock';
+    new bootstrap.Modal(document.getElementById('modalDetalleProducto')).show();
+}
+
+function limpiarFiltros() {
+    document.getElementById('filtroCodigo').value = '';
+    document.getElementById('filtroTipo').value = '';
+    
+    const hoy = new Date();
+    const hace7dias = new Date();
+    hace7dias.setDate(hoy.getDate() - 7);
+    
+    const formatoFecha = (d) => d.getFullYear() + '-' + 
+                                String(d.getMonth() + 1).padStart(2, '0') + '-' + 
+                                String(d.getDate()).padStart(2, '0');
+    
+    document.getElementById('filtroHasta').value = formatoFecha(hoy);
+    document.getElementById('filtroDesde').value = formatoFecha(hace7dias);
+    
+    cargarMovimientos();
+}
+
+function exportarExcel() {
+    alert('Función de exportación - Próximamente');
+}
+
+function mostrarError(msg) {
+    alert(msg);
+}
+</script>
+{% endblock %}
