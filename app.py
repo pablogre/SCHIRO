@@ -169,8 +169,8 @@ except ImportError:
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
     class DefaultARCAConfig:
-        CUIT = '27333429433'
-        PUNTO_VENTA = 1
+        CUIT = '20291687297'
+        PUNTO_VENTA = 9
         CERT_PATH = 'certificados/certificado.crt'
         KEY_PATH = 'certificados/private.key'
         USE_HOMOLOGACION = False  # PRODUCCIÓN

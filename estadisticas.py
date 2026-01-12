@@ -80,6 +80,7 @@ def init_estadisticas(db, Factura, DetalleFactura, Producto):
                 extract('year', Factura.fecha) == ano_anterior,
                 Factura.estado != 'cancelada'
             ).scalar() or 0
+            total_ano_anterior = float(total_ano_anterior)  # Convertir a float para evitar error con Decimal
             
             crecimiento = 0
             if total_ano_anterior > 0:
@@ -135,9 +136,9 @@ def init_estadisticas(db, Factura, DetalleFactura, Producto):
                 ).all()
                 
                 # Crear array con todos los meses
-                ventas_mensuales = [0] * 12
+                ventas_mensuales = [0.0] * 12
                 for venta in ventas_ano:
-                    ventas_mensuales[venta.mes - 1] = float(venta.total)
+                    ventas_mensuales[int(venta.mes) - 1] = float(venta.total) if venta.total else 0.0
                 
                 datos_comparacion.append({
                     'ano': ano,
@@ -194,8 +195,8 @@ def init_estadisticas(db, Factura, DetalleFactura, Producto):
                 productos.append({
                     'codigo': producto.codigo,
                     'nombre': producto.nombre,
-                    'cantidad_vendida': int(producto.cantidad_vendida),
-                    'total_vendido': float(producto.total_vendido)
+                    'cantidad_vendida': int(producto.cantidad_vendida) if producto.cantidad_vendida else 0,
+                    'total_vendido': float(producto.total_vendido) if producto.total_vendido else 0.0
                 })
             
             return jsonify({
@@ -314,7 +315,7 @@ def init_estadisticas(db, Factura, DetalleFactura, Producto):
                 'top_productos': [
                     {
                         'nombre': p.nombre,
-                        'cantidad': float(p.cantidad_vendida)
+                        'cantidad': float(p.cantidad_vendida) if p.cantidad_vendida else 0.0
                     } for p in top_productos
                 ]
             })
@@ -422,8 +423,8 @@ def init_estadisticas(db, Factura, DetalleFactura, Producto):
             for medio in medios_pago:
                 medios_pago_lista.append({
                     'medio_pago': medio.medio_pago,
-                    'cantidad': int(medio.cantidad),
-                    'total': round(float(medio.total), 2),
+                    'cantidad': int(medio.cantidad) if medio.cantidad else 0,
+                    'total': round(float(medio.total), 2) if medio.total else 0.0,
                     'porcentaje': 0
                 })
             
@@ -598,11 +599,12 @@ def init_estadisticas(db, Factura, DetalleFactura, Producto):
             
             medios_pago_lista = []
             for medio in medios_pago:
+                medio_total = float(medio.total) if medio.total else 0.0
                 medios_pago_lista.append({
                     'medio': medio.medio_pago,
-                    'cantidad': int(medio.cantidad),
-                    'total': float(medio.total),
-                    'porcentaje': round((float(medio.total) / total_general * 100), 1) if total_general > 0 else 0
+                    'cantidad': int(medio.cantidad) if medio.cantidad else 0,
+                    'total': medio_total,
+                    'porcentaje': round((medio_total / total_general * 100), 1) if total_general > 0 else 0
                 })
             
             iva_lista = []
@@ -618,8 +620,8 @@ def init_estadisticas(db, Factura, DetalleFactura, Producto):
                 productos_lista.append({
                     'codigo': prod.codigo,
                     'nombre': prod.nombre,
-                    'cantidad': float(prod.cantidad_vendida),
-                    'total': float(prod.total_vendido)
+                    'cantidad': float(prod.cantidad_vendida) if prod.cantidad_vendida else 0.0,
+                    'total': float(prod.total_vendido) if prod.total_vendido else 0.0
                 })
             
             # Generar HTML

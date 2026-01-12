@@ -10,7 +10,7 @@ import json
 from datetime import datetime
 
 # ============== CONFIGURACIÓN ==============
-URL_LICENCIAS = "https://gist.githubusercontent.com/pablogre/77854e5d55d01018af8a4cab8ab5cc30/raw/licencias.json"
+URL_LICENCIAS = URL_LICENCIAS = "https://gist.githubusercontent.com/pablogre/77854e5d55d01018af8a4cab8ab5cc30/raw"   ##"https://gist.githubusercontent.com/pablogre/77854e5d55d01018af8a4cab8ab5cc30/raw/licencias.json"
 
 # Información de contacto para mensajes
 CONTACTO_EMAIL = "pablogustavore@gmail.com"

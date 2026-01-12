@@ -596,27 +596,45 @@ function calcularIVAAFIP() {
 
 // ================== FUNCIÓN PARA DETECTAR Y PARSEAR CÓDIGOS DE BALANZA ==================
 function detectarCodigoBalanza(codigo) {
-    // Verificar si es un código de balanza: 13 dígitos y empieza con "200"
-    if (codigo.length === 13 && codigo.startsWith('200')) {
+    // Verificar si es un código de balanza: 13 dígitos y empieza con "20"
+    if (codigo.length === 13 && codigo.startsWith('20')) {
         console.log('🎯 Código de balanza detectado:', codigo);
         
-        // Extraer partes del código
-        const codigoProducto = codigo.substring(3, 7);  // Posiciones 3-6 (4 dígitos)
-        const pesoGramos = codigo.substring(7, 12);     // Posiciones 7-11 (5 dígitos)
+        // Formato del código de balanza:
+        // 20 | XXXXX | PPPPP | V
+        // 20 = prefijo balanza (2 dígitos)
+        // XXXXX = código producto (5 dígitos)
+        // PPPPP = peso en gramos (5 dígitos)
+        // V = dígito verificador (1 dígito)
+        
+        const codigoProductoRaw = codigo.substring(2, 7);  // Posiciones 2-6 (5 dígitos) ej: "00035"
+        const pesoGramos = codigo.substring(7, 12);        // Posiciones 7-11 (5 dígitos) ej: "04045"
         const digitoVerificador = codigo.substring(12, 13); // Último dígito
         
-        // Convertir peso de gramos a kg
+        // Convertir código de balanza al código de la DB
+        // Los productos pesables tienen código 00XXX en balanza pero 100XXX en la DB
+        // Ejemplo: 00035 en balanza → 100035 en DB
+        let codigoProductoDB;
+        if (codigoProductoRaw.startsWith('00')) {
+            // Reemplazar "00" inicial por "100"
+            codigoProductoDB = '100' + codigoProductoRaw.substring(2);
+        } else {
+            codigoProductoDB = codigoProductoRaw;
+        }
+        
+        // Convertir peso de gramos a kg (dividir por 1000)
         const pesoKg = parseInt(pesoGramos) / 1000;
         
         console.log('📊 Desglose del código de balanza:');
-        console.log('   - Código producto:', codigoProducto);
+        console.log('   - Código balanza:', codigoProductoRaw);
+        console.log('   - Código DB:', codigoProductoDB);
         console.log('   - Peso en gramos:', pesoGramos);
         console.log('   - Peso en kg:', pesoKg);
         console.log('   - Dígito verificador:', digitoVerificador);
         
         return {
             esBalanza: true,
-            codigoProducto: codigoProducto,
+            codigoProducto: codigoProductoDB,  // ← Código convertido para la DB
             peso: pesoKg
         };
     }
@@ -627,6 +645,26 @@ function detectarCodigoBalanza(codigo) {
         peso: null
     };
 }
+// ====================================================================================
+
+/*
+El formato correcto del código de balanza es:
+20 | 00035 | 04045 | 4
+   |       |       |
+   |       |       └─ Dígito verificador (1 dígito)
+   |       └─ Peso en gramos (5 dígitos) = 4.045 kg
+   └─ Código producto (5 dígitos) = 00035 → en tu DB es 10035
+
+EJEMPLO:
+Código escaneado: 2000035040454
+- Prefijo: 20
+- Código producto balanza: 00035
+- Código producto DB: 100035 (reemplaza 00 por 100)
+- Peso: 04045 → 4.045 kg
+- Verificador: 4
+
+Resultado: Busca producto con código "100035" y cantidad 4.045
+*/
 // ====================================================================================
 
 
@@ -1240,7 +1278,8 @@ function actualizarTablaVenta() {
             </td>
             <td>
                 <input type="number" class="form-control cantidad-input" value="${item.cantidad.toFixed(3)}"
-                       min="0.001" step="0.001"
+                       min="1" step="1"
+                       onfocus="this.select()"
                        onblur="actualizarCantidad(${item.id}, this.value)"
                        onkeypress="manejarEnterCantidad(event, ${item.id})"
                        style="width: 100px;">

@@ -27,9 +27,9 @@ from datetime import timedelta
 
 
 # ═══ DATOS FISCALES ═══
-CUIT = '20203852100'                    # ← CUIT del cliente     Noelia: 27333429433
-RAZON_SOCIAL = 'RE PABLO GUSTAVO'       # ← Razón social del cliente
-PUNTO_VENTA = 3                         # ← Punto de venta AFIP  Noelia: 4 
+CUIT = '20291687297'                    # ← CUIT del cliente     Noelia: 20203852100
+RAZON_SOCIAL = 'Schiro Diego Raul'       # ← Razón social del cliente
+PUNTO_VENTA = 9                         # ← Punto de venta AFIP  Noelia: 3
 
 # ═══ BASE DE DATOS ═══
 DB_HOST = 'localhost'                   # ← Host de MySQL
