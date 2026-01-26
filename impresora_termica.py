@@ -283,6 +283,24 @@ class ImpresoraTermica:
             
             lineas.append(self.linea_separadora())
             
+            # ═══ MEDIOS DE PAGO ═══
+            if hasattr(factura, 'medios_pago') and factura.medios_pago:
+                total_factura = float(getattr(factura, 'total', 0))
+                lineas.append(self.centrar_texto("FORMA DE PAGO"))
+                total_pagado = 0
+                for mp in factura.medios_pago:
+                    medio_nombre = str(mp.medio_pago).upper().replace('_', ' ')
+                    importe_mp = float(mp.importe)
+                    total_pagado += importe_mp
+                    lineas.append(self.justificar_texto(f"{medio_nombre}:", f"${importe_mp:,.2f}"))
+                
+                # Mostrar total pagado vs total factura si pagó menos
+                if total_pagado < total_factura - 0.01:
+                    lineas.append(self.linea_separadora())
+                    lineas.append(self.justificar_texto("TOTAL PAGADO:", f"${total_pagado:,.2f}"))
+                
+                lineas.append(self.linea_separadora())
+            
             # INFORMACIÓN AFIP
             cae = getattr(factura, 'cae', None)
             if cae:
@@ -332,10 +350,10 @@ class ImpresoraTermica:
             # PIE DE PÁGINA
             lineas.append("")
             
-            # ═══ MOSTRAR NUEVO SALDO PENDIENTE SI EXISTE ═══
+            # ═══ MOSTRAR SALDO PENDIENTE SI EXISTE ═══
             if observaciones:
-                if 'Nuevo saldo pendiente' in observaciones:
-                    match = re.search(r'Nuevo saldo pendiente[:\s]*\$?([\d,.]+)', observaciones)
+                if 'Saldo pendiente' in observaciones:
+                    match = re.search(r'Saldo pendiente[:\s]*\$?([\d,.]+)', observaciones)
                     if match:
                         nuevo_saldo_str = match.group(1)
                         lineas.append(self.linea_separadora())
