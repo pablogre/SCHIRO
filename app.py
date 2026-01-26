@@ -262,6 +262,7 @@ class Cliente(db.Model):
     condicion_iva = db.Column(db.String(50))  # Responsable Inscripto, Monotributista, etc.
     tipo_precio = db.Column(db.String(10), default='venta')
     lista_precio = db.Column(db.Integer, default=1)  # 1-5, lista de precio por defecto
+    saldo = db.Column(Numeric(12, 2), default=0.00)  # Saldo pendiente (positivo=debe, negativo=a favor)
 
 class Producto(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -652,6 +653,7 @@ class Factura(db.Model):
     estado = db.Column(db.String(20), default='pendiente')  # pendiente, autorizada, anulada
     cae = db.Column(db.String(50))  # Código de Autorización Electrónico
     vto_cae = db.Column(db.Date)
+    observaciones = db.Column(db.Text)  # Para saldo anterior, notas, etc.
     
     cliente = db.relationship('Cliente', backref='facturas')
     usuario = db.relationship('Usuario', backref='facturas')
@@ -2008,6 +2010,74 @@ def obtener_cliente(cliente_id):
         })
     except Exception as e:
         return jsonify({'error': f'Error al obtener cliente: {str(e)}'}), 500
+
+
+@app.route('/api/cliente/<int:cliente_id>/saldo')
+def api_cliente_saldo(cliente_id):
+    """Obtener saldo pendiente de un cliente"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'No autorizado'}), 401
+    
+    try:
+        # Cliente id=1 (Consumidor Final) nunca tiene saldo
+        if cliente_id == 1:
+            return jsonify({
+                'success': True,
+                'cliente_id': 1,
+                'saldo': 0,
+                'permite_saldo': False
+            })
+        
+        cliente = Cliente.query.get(cliente_id)
+        if not cliente:
+            return jsonify({'success': False, 'error': 'Cliente no encontrado'}), 404
+        
+        return jsonify({
+            'success': True,
+            'cliente_id': cliente.id,
+            'nombre': cliente.nombre,
+            'saldo': float(cliente.saldo or 0),
+            'permite_saldo': True
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/cliente/<int:cliente_id>/ajustar_saldo', methods=['POST'])
+def api_ajustar_saldo(cliente_id):
+    """Ajustar manualmente el saldo de un cliente"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'No autorizado'}), 401
+    
+    try:
+        # No permitir ajustar saldo de Consumidor Final
+        if cliente_id == 1:
+            return jsonify({'success': False, 'error': 'No se puede ajustar saldo de Consumidor Final'}), 400
+        
+        cliente = Cliente.query.get(cliente_id)
+        if not cliente:
+            return jsonify({'success': False, 'error': 'Cliente no encontrado'}), 404
+        
+        data = request.json
+        nuevo_saldo = float(data.get('nuevo_saldo', 0))
+        motivo = data.get('motivo', 'Ajuste manual')
+        
+        saldo_anterior = float(cliente.saldo or 0)
+        cliente.saldo = Decimal(str(nuevo_saldo))
+        db.session.commit()
+        
+        print(f"💰 Saldo ajustado - Cliente: {cliente.nombre}, Anterior: ${saldo_anterior:.2f}, Nuevo: ${nuevo_saldo:.2f}, Motivo: {motivo}")
+        
+        return jsonify({
+            'success': True,
+            'cliente_id': cliente.id,
+            'saldo_anterior': saldo_anterior,
+            'saldo_nuevo': nuevo_saldo,
+            'mensaje': f'Saldo ajustado correctamente'
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/guardar_cliente', methods=['POST'])
@@ -3607,13 +3677,24 @@ def procesar_venta():
 
         diferencia = total_medios - total_venta
 
+        # ═══ NUEVO: Variable para saldo pendiente ═══
+        saldo_anterior = float(data.get('saldo_anterior', 0))
+        nuevo_saldo_pendiente = 0
+
         if diferencia < -0.01:
             faltante = abs(diferencia)
-            print(f"❌ ERROR: Faltan ${faltante:.2f}")
-            return jsonify({
-                'success': False, 
-                'error': f'Faltan ${faltante:.2f} para completar el pago'
-            })
+            # ═══ NUEVO: Permitir saldo solo para clientes registrados (id > 1) ═══
+            if cliente_id and int(cliente_id) > 1:
+                print(f"💳 Cliente {cliente_id} pagará ${total_medios:.2f} de ${total_venta:.2f}")
+                print(f"💳 Se generará saldo pendiente de ${faltante:.2f}")
+                nuevo_saldo_pendiente = faltante
+                # Continuar con la venta, el saldo se guarda después
+            else:
+                print(f"❌ ERROR: Faltan ${faltante:.2f} (Consumidor Final no permite saldo)")
+                return jsonify({
+                    'success': False, 
+                    'error': f'Faltan ${faltante:.2f} para completar el pago. Consumidor Final debe pagar el total.'
+                })
         elif diferencia > 0.01:
             medios_efectivo = [mp for mp in medios_pago if mp.get('medio_pago') == 'efectivo']
             total_efectivo = sum(float(mp.get('importe', 0)) for mp in medios_efectivo)
@@ -3829,6 +3910,42 @@ def procesar_venta():
             else:
                 print(f"⚠️ Error al marcar productos: {resultado_marca['mensaje']}")
         
+        # ═══ ACTUALIZAR SALDO DEL CLIENTE ═══
+        if cliente_id and int(cliente_id) > 1:
+            cliente = Cliente.query.get(cliente_id)
+            if cliente:
+                # Calcular nuevo saldo
+                # nuevo_saldo_pendiente ya tiene la diferencia (total_venta - total_medios) si es positiva
+                # Si pagó de más, la diferencia es negativa (saldo a favor)
+                
+                if nuevo_saldo_pendiente > 0:
+                    # Cliente debe dinero
+                    cliente.saldo = Decimal(str(nuevo_saldo_pendiente))
+                    print(f"💰 Saldo cliente {cliente.nombre}: nuevo saldo pendiente = ${nuevo_saldo_pendiente:.2f}")
+                    
+                    # Agregar a observaciones de la factura
+                    obs_saldo = f"Saldo pendiente: ${nuevo_saldo_pendiente:,.2f}"
+                    if saldo_anterior > 0:
+                        obs_saldo = f"Saldo anterior: ${saldo_anterior:,.2f} | " + obs_saldo
+                    factura.observaciones = obs_saldo
+                    
+                elif diferencia > 0.01:
+                    # Cliente pagó de más - saldo a favor (guardamos como negativo)
+                    saldo_a_favor = diferencia
+                    cliente.saldo = Decimal(str(-saldo_a_favor))
+                    print(f"💰 Saldo cliente {cliente.nombre}: saldo a favor = ${saldo_a_favor:.2f}")
+                    factura.observaciones = f"Saldo a favor del cliente: ${saldo_a_favor:,.2f}"
+                else:
+                    # Pagó exacto - limpiar saldo
+                    if saldo_anterior != 0:
+                        print(f"💰 Saldo cliente {cliente.nombre}: pagó todo, saldo anterior ${saldo_anterior:.2f} cancelado")
+                        factura.observaciones = f"Saldo anterior cancelado: ${saldo_anterior:,.2f}"
+                    cliente.saldo = Decimal('0')
+                
+                # ═══ GUARDAR CAMBIOS DE SALDO Y OBSERVACIONES ═══
+                db.session.commit()
+                print(f"✅ Saldo del cliente guardado correctamente")
+
         # ═══ REGISTRAR DESCUENTO (tu código original) ═══
         if data.get('descuento_monto', 0) > 0:
             total_antes_descuento = float(data.get('subtotal', 0)) + float(data.get('iva', 0))
@@ -8448,6 +8565,29 @@ def exportar_pdf_cta_cte():
         }), 500
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# REPORTE DE SALDOS DE CLIENTES
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.route('/reporte_saldos_clientes')
+def reporte_saldos_clientes():
+    """Reporte de clientes con saldo pendiente"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    # Obtener clientes con saldo != 0 (excluyendo id=1)
+    clientes_con_saldo = Cliente.query.filter(
+        Cliente.id > 1,
+        Cliente.saldo != 0
+    ).order_by(desc(Cliente.saldo)).all()
+    
+    total_a_favor = sum(float(c.saldo) for c in clientes_con_saldo if c.saldo < 0)
+    total_deben = sum(float(c.saldo) for c in clientes_con_saldo if c.saldo > 0)
+    
+    return render_template('reporte_saldos_clientes.html',
+                          clientes=clientes_con_saldo,
+                          total_a_favor=abs(total_a_favor),
+                          total_deben=total_deben)
 
 
 app.run(debug=True, host='0.0.0.0', port=5080)

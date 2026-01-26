@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+
+{% block title %}Reporte de Saldos - Clientes{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2"><i class="fas fa-balance-scale"></i> Saldos de Clientes</h1>
+    <div>
+        <button class="btn btn-success" onclick="exportarExcel()">
+            <i class="fas fa-file-excel"></i> Exportar Excel
+        </button>
+        <button class="btn btn-secondary" onclick="window.print()">
+            <i class="fas fa-print"></i> Imprimir
+        </button>
+        <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
+            <i class="fas fa-arrow-left"></i> Volver
+        </a>
+    </div>
+</div>
+
+<!-- Resumen -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card bg-danger text-white">
+            <div class="card-body">
+                <h5 class="card-title"><i class="fas fa-arrow-up"></i> Total que Deben</h5>
+                <h2>${{ "{:,.2f}".format(total_deben) }}</h2>
+                <small>Clientes con saldo pendiente</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <h5 class="card-title"><i class="fas fa-arrow-down"></i> Total a Favor</h5>
+                <h2>${{ "{:,.2f}".format(total_a_favor) }}</h2>
+                <small>Clientes con crédito</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <h5 class="card-title"><i class="fas fa-users"></i> Clientes con Saldo</h5>
+                <h2>{{ clientes|length }}</h2>
+                <small>Total de registros</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4">
+                <input type="text" class="form-control" id="buscar" placeholder="Buscar cliente..." onkeyup="filtrarTabla()">
+            </div>
+            <div class="col-md-3">
+                <select class="form-select" id="filtro_tipo" onchange="filtrarTabla()">
+                    <option value="">Todos</option>
+                    <option value="debe">Solo los que deben</option>
+                    <option value="favor">Solo con saldo a favor</option>
+                </select>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabla de clientes -->
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover" id="tabla_saldos">
+                <thead class="table-dark">
+                    <tr>
+                        <th>ID</th>
+                        <th>Cliente</th>
+                        <th>Documento</th>
+                        <th>Teléfono</th>
+                        <th class="text-end">Saldo</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cliente in clientes %}
+                    <tr data-tipo="{{ 'debe' if cliente.saldo > 0 else 'favor' }}">
+                        <td>{{ cliente.id }}</td>
+                        <td><strong>{{ cliente.nombre }}</strong></td>
+                        <td>{{ cliente.documento or '-' }}</td>
+                        <td>{{ cliente.telefono or '-' }}</td>
+                        <td class="text-end">
+                            {% if cliente.saldo > 0 %}
+                                <span class="text-danger fw-bold">${{ "{:,.2f}".format(cliente.saldo) }}</span>
+                            {% else %}
+                                <span class="text-success fw-bold">-${{ "{:,.2f}".format(cliente.saldo|abs) }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if cliente.saldo > 0 %}
+                                <span class="badge bg-danger">DEBE</span>
+                            {% else %}
+                                <span class="badge bg-success">A FAVOR</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary" onclick="verHistorial({{ cliente.id }})" title="Ver historial">
+                                <i class="fas fa-history"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-warning" onclick="ajustarSaldo({{ cliente.id }}, '{{ cliente.nombre }}', {{ cliente.saldo }})" title="Ajustar saldo">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            {% if cliente.saldo > 0 %}
+                            <a href="{{ url_for('nueva_venta') }}?cliente={{ cliente.id }}" class="btn btn-sm btn-outline-success" title="Cobrar">
+                                <i class="fas fa-dollar-sign"></i>
+                            </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        {% if not clientes %}
+        <div class="text-center py-5">
+            <i class="fas fa-check-circle fa-4x text-success mb-3"></i>
+            <h4>¡Excelente!</h4>
+            <p class="text-muted">No hay clientes con saldo pendiente</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Modal para ajustar saldo -->
+<div class="modal fade" id="modalAjustarSaldo" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title"><i class="fas fa-edit"></i> Ajustar Saldo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Cliente: <strong id="modal_cliente_nombre"></strong></p>
+                <p>Saldo actual: <strong id="modal_saldo_actual"></strong></p>
+                <hr>
+                <div class="mb-3">
+                    <label class="form-label">Nuevo saldo</label>
+                    <div class="input-group">
+                        <span class="input-group-text">$</span>
+                        <input type="number" class="form-control" id="nuevo_saldo" step="0.01">
+                    </div>
+                    <small class="text-muted">Ingrese 0 para limpiar el saldo. Negativo = a favor del cliente.</small>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Motivo del ajuste</label>
+                    <input type="text" class="form-control" id="motivo_ajuste" placeholder="Ej: Pago en efectivo, corrección, etc.">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-warning" onclick="guardarAjusteSaldo()">
+                    <i class="fas fa-save"></i> Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let clienteIdAjustar = null;
+
+function filtrarTabla() {
+    const buscar = document.getElementById('buscar').value.toLowerCase();
+    const filtroTipo = document.getElementById('filtro_tipo').value;
+    const filas = document.querySelectorAll('#tabla_saldos tbody tr');
+    
+    filas.forEach(fila => {
+        const texto = fila.textContent.toLowerCase();
+        const tipo = fila.getAttribute('data-tipo');
+        
+        let mostrar = texto.includes(buscar);
+        
+        if (filtroTipo && tipo !== filtroTipo) {
+            mostrar = false;
+        }
+        
+        fila.style.display = mostrar ? '' : 'none';
+    });
+}
+
+function ajustarSaldo(clienteId, nombre, saldoActual) {
+    clienteIdAjustar = clienteId;
+    document.getElementById('modal_cliente_nombre').textContent = nombre;
+    document.getElementById('modal_saldo_actual').textContent = '$' + saldoActual.toFixed(2);
+    document.getElementById('nuevo_saldo').value = saldoActual;
+    document.getElementById('motivo_ajuste').value = '';
+    
+    new bootstrap.Modal(document.getElementById('modalAjustarSaldo')).show();
+}
+
+function guardarAjusteSaldo() {
+    const nuevoSaldo = parseFloat(document.getElementById('nuevo_saldo').value) || 0;
+    const motivo = document.getElementById('motivo_ajuste').value;
+    
+    if (!motivo.trim()) {
+        alert('Debe ingresar un motivo para el ajuste');
+        return;
+    }
+    
+    fetch(`/api/cliente/${clienteIdAjustar}/ajustar_saldo`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            nuevo_saldo: nuevoSaldo,
+            motivo: motivo
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Saldo ajustado correctamente');
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        alert('Error al ajustar saldo');
+        console.error(error);
+    });
+}
+
+function verHistorial(clienteId) {
+    // Por ahora solo muestra alerta, se puede implementar un modal con historial
+    alert('Funcionalidad de historial próximamente');
+}
+
+function exportarExcel() {
+    // Crear CSV simple
+    let csv = 'ID,Cliente,Documento,Teléfono,Saldo,Estado\n';
+    
+    document.querySelectorAll('#tabla_saldos tbody tr').forEach(fila => {
+        if (fila.style.display !== 'none') {
+            const celdas = fila.querySelectorAll('td');
+            const datos = [
+                celdas[0].textContent.trim(),
+                '"' + celdas[1].textContent.trim() + '"',
+                celdas[2].textContent.trim(),
+                celdas[3].textContent.trim(),
+                celdas[4].textContent.trim().replace('$', '').replace(',', ''),
+                celdas[5].textContent.trim()
+            ];
+            csv += datos.join(',') + '\n';
+        }
+    });
+    
+    // Descargar
+    const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'saldos_clientes_' + new Date().toISOString().slice(0,10) + '.csv';
+    link.click();
+}
+</script>
+
+<style>
+@media print {
+    .btn, .card-body > .row:first-child, .modal {
+        display: none !important;
+    }
+    .card {
+        border: none !important;
+        box-shadow: none !important;
+    }
+}
+</style>
+{% endblock %}

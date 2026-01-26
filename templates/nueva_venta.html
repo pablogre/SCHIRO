@@ -171,6 +171,14 @@
                     <strong>Cliente seleccionado:</strong>
                     <div id="info_cliente">Consumidor Final</div>
                 </div>
+                
+                <!-- ALERTA DE SALDO ANTERIOR -->
+                <div id="alerta_saldo" class="alert alert-warning d-none">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Saldo Anterior:</strong>
+                    <span id="saldo_anterior_display">$0.00</span>
+                    <br><small>Este monto se sumará al total de la venta</small>
+                </div>
             </div>
         </div>
 
@@ -187,6 +195,10 @@
                 <div class="row mb-2">
                     <div class="col" id="iva_label">IVA:</div>
                     <div class="col text-end" id="iva_display">$0.00</div>
+                </div>
+                <div class="row mb-2" id="fila_saldo_anterior" style="display: none;">
+                    <div class="col text-warning"><strong>+ Saldo Anterior:</strong></div>
+                    <div class="col text-end text-warning fw-bold" id="saldo_anterior_totales">$0.00</div>
                 </div>
                 <hr>
                 <div class="row">
@@ -567,6 +579,8 @@ let tipoPrecioActivo = 'venta'; // Tipo de precio: 'venta' o 'costo' (mayoristas
 let productosPendientesCTACTE = [];  // Productos pendientes del cliente
 let productosSeleccionadosCTACTE = [];  // IDs de cta_cte_detalle seleccionados para pagar
 let pesoBalanza = null; // Almacena el peso detectado del código de balanza
+// ═══ VARIABLE GLOBAL PARA SALDO DE CLIENTE ═══
+let saldoAnteriorCliente = 0;  // Saldo pendiente del cliente seleccionado
 
 console.log('🚀 JavaScript de nueva_venta.html cargado correctamente');
 
@@ -1470,7 +1484,15 @@ function calcularTotales() {
     
     // ✅ USAR método AFIP
     const iva = calcularIVAAFIP();
-    const total = subtotal + iva;
+    let total = subtotal + iva;
+    
+    // ═══ NUEVO: Sumar saldo anterior del cliente ═══
+    if (saldoAnteriorCliente > 0) {
+        total += saldoAnteriorCliente;
+    } else if (saldoAnteriorCliente < 0) {
+        // Saldo a favor: restar del total
+        total += saldoAnteriorCliente;  // Es negativo, así que suma negativamente
+    }
     
     // Actualizar displays
     document.getElementById('subtotal_display').textContent = `${subtotal.toFixed(2)}`;
@@ -1481,7 +1503,7 @@ function calcularTotales() {
     actualizarEtiquetaIVA();
     
     // 🔍 DEBUG
-    console.log('💰 Totales calculados:', { subtotal, iva, total });
+    console.log('💰 Totales calculados:', { subtotal, iva, saldoAnterior: saldoAnteriorCliente, total });
 }
 
 // *** NUEVA FUNCIÓN: Actualizar etiqueta de IVA ***
@@ -1522,6 +1544,12 @@ function procesarVenta() {
     const subtotal = itemsVenta.reduce((sum, item) => sum + item.subtotal, 0);
     const iva = calcularIVAAFIP();
     totalVenta = subtotal + iva;
+    
+    // ═══ INCLUIR SALDO ANTERIOR EN EL TOTAL A PAGAR ═══
+    if (saldoAnteriorCliente !== 0) {
+        totalVenta += saldoAnteriorCliente;
+        console.log('💰 Total incluye saldo anterior:', { subtotalProductos: subtotal + iva, saldoAnterior: saldoAnteriorCliente, totalFinal: totalVenta });
+    }
     
     // Limpiar medios de pago anteriores
     mediosPagoIngresados = [];
@@ -1806,10 +1834,19 @@ function actualizarResumenPago() {
     } else {
         // Falta dinero
         const faltante = Math.abs(diferencia);
+        const clienteId = document.getElementById('cliente_select').value;
+        
         diferenciasSpan.textContent = `❌ Faltan ${formatearMoneda(faltante)}`;
         diferenciasSpan.className = 'h5 diferencia-negativa';
-        estadoPago.innerHTML = `<span class="badge bg-danger">❌ Faltan ${formatearMoneda(faltante)}</span>`;
-        btnConfirmar.disabled = true;
+        
+        // ═══ NUEVO: Si es cliente registrado (id > 1), permitir generar saldo ═══
+        if (clienteId && clienteId != 1) {
+            estadoPago.innerHTML = `<span class="badge bg-warning text-dark">⚠️ Generará saldo de ${formatearMoneda(faltante)}</span>`;
+            btnConfirmar.disabled = false;  // Habilitar botón para clientes registrados
+        } else {
+            estadoPago.innerHTML = `<span class="badge bg-danger">❌ Faltan ${formatearMoneda(faltante)}</span>`;
+            btnConfirmar.disabled = true;   // Deshabilitar para Consumidor Final
+        }
         ocultarSeccionVuelto();
     }
 }
@@ -1906,11 +1943,39 @@ function confirmarMediosPago() {
     console.log('Diferencia:', diferencia);
     console.log('Medios de pago:', mediosPagoIngresados);
     
-    // Verificar que el pago esté completo (permitir exacto o con vuelto en efectivo)
+    // Verificar que el pago esté completo
     if (diferencia < -0.01) {
         const faltante = Math.abs(diferencia);
-        mostrarError(`Faltan $${faltante.toFixed(2)} para completar el pago`);
-        return;
+        const clienteSelect = document.getElementById('cliente_select');
+        const clienteId = clienteSelect.value;
+        
+        // ═══ Permitir pago parcial solo para clientes registrados (id > 1) ═══
+        // La opción "Consumidor Final" genérica tiene id=1 y NO permite saldo
+        if (clienteId && clienteId != 1) {
+            // Cliente registrado: confirmar que quiere dejar saldo
+            Swal.fire({
+                title: '¿Generar saldo pendiente?',
+                html: `El cliente pagará <strong>$${totalIngresado.toLocaleString('es-AR', {minimumFractionDigits: 2})}</strong> de <strong>$${totalAPagar.toLocaleString('es-AR', {minimumFractionDigits: 2})}</strong>.<br><br>Se generará un saldo pendiente de <strong>$${faltante.toLocaleString('es-AR', {minimumFractionDigits: 2})}</strong>`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Sí, generar saldo',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Cerrar modal y procesar
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('modalMediosPago'));
+                    modal.hide();
+                    procesarVentaConMediosPago();
+                }
+            });
+            return;
+        } else {
+            // Consumidor Final (id=1): no permitir saldo
+            mostrarError(`Faltan $${faltante.toFixed(2)} para completar el pago. Consumidor Final no puede tener saldo.`);
+            return;
+        }
     }
     
     // Si todo está bien, procesar
@@ -2004,6 +2069,75 @@ function actualizarTipoComprobante() {
     } else {
         tipoComprobante.value = '06';
     }
+    
+    // ═══ NUEVO: Cargar saldo del cliente ═══
+    cargarSaldoCliente(clienteSelect.value);
+}
+
+// ═══ FUNCIÓN PARA CARGAR SALDO DEL CLIENTE ═══
+function cargarSaldoCliente(clienteId) {
+    const alertaSaldo = document.getElementById('alerta_saldo');
+    const saldoDisplay = document.getElementById('saldo_anterior_display');
+    const filaSaldoTotales = document.getElementById('fila_saldo_anterior');
+    const saldoTotales = document.getElementById('saldo_anterior_totales');
+    
+    // Resetear saldo
+    saldoAnteriorCliente = 0;
+    
+    // Si es Consumidor Final (id=1), ocultar todo
+    if (!clienteId || clienteId == 1) {
+        alertaSaldo.classList.add('d-none');
+        filaSaldoTotales.style.display = 'none';
+        calcularTotales();
+        return;
+    }
+    
+    // Obtener saldo del cliente
+    fetch(`/api/cliente/${clienteId}/saldo`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.saldo > 0) {
+                saldoAnteriorCliente = data.saldo;
+                
+                // Mostrar alerta
+                alertaSaldo.classList.remove('d-none');
+                alertaSaldo.classList.remove('alert-success');
+                alertaSaldo.classList.add('alert-warning');
+                saldoDisplay.textContent = `$${data.saldo.toLocaleString('es-AR', {minimumFractionDigits: 2})}`;
+                
+                // Mostrar en totales
+                filaSaldoTotales.style.display = 'flex';
+                saldoTotales.textContent = `$${data.saldo.toLocaleString('es-AR', {minimumFractionDigits: 2})}`;
+                
+                // Recalcular totales
+                calcularTotales();
+                
+                console.log(`💰 Cliente ${data.nombre} tiene saldo pendiente: $${data.saldo}`);
+            } else if (data.success && data.saldo < 0) {
+                // Cliente tiene saldo a favor
+                saldoAnteriorCliente = data.saldo;
+                alertaSaldo.classList.remove('d-none');
+                alertaSaldo.classList.remove('alert-warning');
+                alertaSaldo.classList.add('alert-success');
+                saldoDisplay.innerHTML = `<span class="text-success">$${Math.abs(data.saldo).toLocaleString('es-AR', {minimumFractionDigits: 2})} A FAVOR</span>`;
+                
+                filaSaldoTotales.style.display = 'flex';
+                saldoTotales.innerHTML = `<span class="text-success">-$${Math.abs(data.saldo).toLocaleString('es-AR', {minimumFractionDigits: 2})}</span>`;
+                
+                calcularTotales();
+                console.log(`💚 Cliente ${data.nombre} tiene saldo a favor: $${Math.abs(data.saldo)}`);
+            } else {
+                // Sin saldo
+                alertaSaldo.classList.add('d-none');
+                filaSaldoTotales.style.display = 'none';
+                calcularTotales();
+            }
+        })
+        .catch(error => {
+            console.error('Error cargando saldo:', error);
+            alertaSaldo.classList.add('d-none');
+            filaSaldoTotales.style.display = 'none';
+        });
 }
 
 // Función para cambiar lista de precios manualmente
@@ -2393,6 +2527,12 @@ function procesarVentaConMediosPago() {
     const iva = calcularIVAAFIP();
     let totalOriginal = subtotal + iva;
     
+    // ═══ INCLUIR SALDO ANTERIOR EN EL TOTAL QUE SE ENVÍA AL BACKEND ═══
+    if (saldoAnteriorCliente !== 0) {
+        totalOriginal += saldoAnteriorCliente;
+        console.log('💰 Total enviado incluye saldo anterior:', { subtotalProductos: subtotal + iva, saldoAnterior: saldoAnteriorCliente, totalOriginal: totalOriginal });
+    }
+    
     // APLICAR DESCUENTO AL TOTAL FINAL
     let totalFinal = totalOriginal - montoDescuento;
     
@@ -2421,6 +2561,7 @@ function procesarVentaConMediosPago() {
     
     const ventaData = {
         cliente_id: parseInt(clienteId),
+        saldo_anterior: saldoAnteriorCliente,  // ═══ NUEVO: Enviar saldo anterior ═══
         tipo_comprobante: tipoComprobante,
         items: itemsParaBD,
         items_detalle: itemsDetallados,
@@ -2567,6 +2708,11 @@ function limpiarVentaSinConfirmacion() {
     productoSeleccionado = null;
     mediosPagoIngresados = [];
     
+    // ═══ NUEVO: Limpiar saldo del cliente ═══
+    saldoAnteriorCliente = 0;
+    document.getElementById('alerta_saldo').classList.add('d-none');
+    document.getElementById('fila_saldo_anterior').style.display = 'none';
+    
     // AGREGAR: Reset de descuentos
     descuentoPorcentaje = 0;
     montoDescuento = 0;
@@ -2627,6 +2773,11 @@ function limpiarVenta() {
 
     productosSeleccionadosCTACTE = [];
     productosPendientesCTACTE = [];
+    
+    // ═══ NUEVO: Limpiar saldo del cliente ═══
+    saldoAnteriorCliente = 0;
+    document.getElementById('alerta_saldo').classList.add('d-none');
+    document.getElementById('fila_saldo_anterior').style.display = 'none';
     
     // Rehabilitar opción CTA.CTE
     const selectMedioPago = document.getElementById('medio_pago_select');
@@ -3365,6 +3516,29 @@ tr.producto-ctacte td {
 .check-producto:checked {
     background-color: #ffc107;
     border-color: #ffc107;
+}
+
+/* ═══ ESTILOS PARA SALDO DE CLIENTE ═══ */
+#alerta_saldo {
+    border-left: 4px solid #ffc107;
+    animation: pulse-saldo 2s infinite;
+}
+
+#alerta_saldo.alert-success {
+    border-left-color: #198754;
+}
+
+@keyframes pulse-saldo {
+    0% { opacity: 1; }
+    50% { opacity: 0.85; }
+    100% { opacity: 1; }
+}
+
+#fila_saldo_anterior {
+    background-color: #fff3cd;
+    padding: 8px 12px;
+    border-radius: 5px;
+    margin: 5px -5px;
 }
 
 </style>

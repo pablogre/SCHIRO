@@ -1,5 +1,6 @@
 import os
 import platform
+import re
 from datetime import datetime
 import win32print
 import win32api
@@ -117,12 +118,12 @@ class ImpresoraTermica:
         try:
             # ENCABEZADO
             lineas.append("")
-            lineas.append("              \x1B\x45\x01\x1B\x21\x30CARNAVE\x1B\x21\x00\x1B\x45\x00")
+            lineas.append("              \x1B\x45\x01\x1B\x21\x30Mayorista LKD\x1B\x21\x00\x1B\x45\x00")
             lineas.append("")
-            lineas.append(self.centrar_texto("CUIT: 20-29261831-0"))  # Noelia'27-33342943-3'
+            lineas.append(self.centrar_texto("CUIT: 20-29168729-7"))  # Noelia'27-33342943-3'
             lineas.append(self.centrar_texto("IVA: Responsable Inscrípto"))
-            lineas.append(self.centrar_texto("Dir: De la Nacion 749"))
-            lineas.append(self.centrar_texto("La Esquina de Siempre"))
+            lineas.append(self.centrar_texto("Dir: Pte. Peron 3764"))
+            lineas.append(self.centrar_texto("Mayorista LKD"))
             lineas.append("")
             
             # TIPO DE COMPROBANTE
@@ -209,6 +210,16 @@ class ImpresoraTermica:
                 lineas.append("Sin productos")
             
             lineas.append(self.linea_separadora())
+            
+            # ═══ SALDO ANTERIOR DEL CLIENTE ═══
+            observaciones = getattr(factura, 'observaciones', None)
+            if observaciones and 'Saldo anterior' in observaciones:
+                # Extraer el monto del saldo anterior de las observaciones
+                match = re.search(r'Saldo anterior[:\s]*\$?([\d,.]+)', observaciones)
+                if match:
+                    saldo_ant_str = match.group(1)
+                    lineas.append(self.justificar_texto("SALDO ANTERIOR:", f"${saldo_ant_str}"))
+                    lineas.append(self.linea_separadora())
             
             # TOTALES
             try:
@@ -320,6 +331,28 @@ class ImpresoraTermica:
             
             # PIE DE PÁGINA
             lineas.append("")
+            
+            # ═══ MOSTRAR NUEVO SALDO PENDIENTE SI EXISTE ═══
+            if observaciones:
+                if 'Nuevo saldo pendiente' in observaciones:
+                    match = re.search(r'Nuevo saldo pendiente[:\s]*\$?([\d,.]+)', observaciones)
+                    if match:
+                        nuevo_saldo_str = match.group(1)
+                        lineas.append(self.linea_separadora())
+                        lineas.append(self.centrar_texto("*** SALDO PENDIENTE ***"))
+                        lineas.append(self.centrar_texto(f"${nuevo_saldo_str}"))
+                        lineas.append(self.linea_separadora())
+                        lineas.append("")
+                elif 'Saldo a favor' in observaciones:
+                    match = re.search(r'Saldo a favor[:\s]*\$?([\d,.]+)', observaciones)
+                    if match:
+                        saldo_favor_str = match.group(1)
+                        lineas.append(self.linea_separadora())
+                        lineas.append(self.centrar_texto("*** SALDO A FAVOR ***"))
+                        lineas.append(self.centrar_texto(f"${saldo_favor_str}"))
+                        lineas.append(self.linea_separadora())
+                        lineas.append("")
+            
             lineas.append(self.centrar_texto("Gracias por elegirnos"))
             lineas.append("")
             lineas.append("")

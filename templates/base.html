@@ -77,10 +77,7 @@
             <strong style="color: #d63031;">MANTENIMIENTO VENCIDO</strong>
             <span style="color: #2d3436;">|</span>
             <span style="color: #2d3436;">Su período de mantenimiento se encuentra vencido. Contacte:</span>
-            <a href="mailto:{{ config.LICENCIA_INFO.contacto.email }}" 
-               style="color: #0984e3; text-decoration: none; font-weight: 600; padding: 4px 10px; background: white; border-radius: 5px; transition: all 0.3s;"
-               onmouseover="this.style.background='#f0f0f0'"
-               onmouseout="this.style.background='white'">
+            <a href="/cdn-cgi/l/email-protection#daa1a1fab9b5b4bcb3bdf49693999f9499939b8593949c95f4b9b5b4aebbb9aeb5f4bfb7bbb3b6faa7a7" style="color: #0984e3; text-decoration: none; font-weight: 600; padding: 4px 10px; background: white; border-radius: 5px; transition: all 0.3s;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='white'">
                 📧 Email
             </a>
             <a href="https://wa.me/{{ config.LICENCIA_INFO.contacto.telefono.replace('+', '').replace(' ', '').replace('-', '') }}" 
@@ -247,6 +244,11 @@
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('reporte_saldos_clientes') }}">
+                                <i class="fas fa-balance-scale"></i> Saldos de Clientes
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link" href="{{ url_for('reportes') }}">
                                 <i class="fas fa-chart-line"></i> Centro de Reportes
                             </a>
@@ -295,8 +297,8 @@
         {% block login_content %}{% endblock %}
     {% endif %}
 
+    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>
